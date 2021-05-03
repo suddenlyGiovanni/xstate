@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>@xstate/svelte | XState Docs</title>
+    <meta name="generator" content="VuePress 1.8.2">
+    
+    <meta name="description" content="Documentation for XState: State Machines and Statecharts for the Modern Web">
+    
+    <link rel="preload" href="/docs/assets/css/0.styles.37f3f459.css" as="style"><link rel="preload" href="/docs/assets/js/app.97d0efbd.js" as="script"><link rel="preload" href="/docs/assets/js/3.5679a708.js" as="script"><link rel="preload" href="/docs/assets/js/4.a24a4539.js" as="script"><link rel="preload" href="/docs/assets/js/54.ebe0ed37.js" as="script"><link rel="prefetch" href="/docs/assets/js/10.9a2ab8b8.js"><link rel="prefetch" href="/docs/assets/js/11.40e0c84e.js"><link rel="prefetch" href="/docs/assets/js/12.247e4bbe.js"><link rel="prefetch" href="/docs/assets/js/13.e9a98067.js"><link rel="prefetch" href="/docs/assets/js/14.a4045470.js"><link rel="prefetch" href="/docs/assets/js/15.15cbe978.js"><link rel="prefetch" href="/docs/assets/js/16.0808c3e3.js"><link rel="prefetch" href="/docs/assets/js/17.d16c098a.js"><link rel="prefetch" href="/docs/assets/js/18.c2d99e65.js"><link rel="prefetch" href="/docs/assets/js/19.220fc2f7.js"><link rel="prefetch" href="/docs/assets/js/20.ba34db9c.js"><link rel="prefetch" href="/docs/assets/js/21.98e3aae2.js"><link rel="prefetch" href="/docs/assets/js/22.24420831.js"><link rel="prefetch" href="/docs/assets/js/23.fbba07f6.js"><link rel="prefetch" href="/docs/assets/js/24.281f5d62.js"><link rel="prefetch" href="/docs/assets/js/25.b4843b43.js"><link rel="prefetch" href="/docs/assets/js/26.3aa8dc8f.js"><link rel="prefetch" href="/docs/assets/js/27.a48d50a4.js"><link rel="prefetch" href="/docs/assets/js/28.e81baaa7.js"><link rel="prefetch" href="/docs/assets/js/29.fbe38de1.js"><link rel="prefetch" href="/docs/assets/js/30.850603b5.js"><link rel="prefetch" href="/docs/assets/js/31.751a7385.js"><link rel="prefetch" href="/docs/assets/js/32.8ed269ff.js"><link rel="prefetch" href="/docs/assets/js/33.4a1b212d.js"><link rel="prefetch" href="/docs/assets/js/34.a90c125e.js"><link rel="prefetch" href="/docs/assets/js/35.638aa8ea.js"><link rel="prefetch" href="/docs/assets/js/36.c31ffdb5.js"><link rel="prefetch" href="/docs/assets/js/37.0b9270a1.js"><link rel="prefetch" href="/docs/assets/js/38.5e99299b.js"><link rel="prefetch" href="/docs/assets/js/39.f64c31b2.js"><link rel="prefetch" href="/docs/assets/js/40.67e11481.js"><link rel="prefetch" href="/docs/assets/js/41.a05653e6.js"><link rel="prefetch" href="/docs/assets/js/42.d8ba6c01.js"><link rel="prefetch" href="/docs/assets/js/43.75a09d53.js"><link rel="prefetch" href="/docs/assets/js/44.89fb7da3.js"><link rel="prefetch" href="/docs/assets/js/45.f04924bd.js"><link rel="prefetch" href="/docs/assets/js/46.193380fe.js"><link rel="prefetch" href="/docs/assets/js/47.193563d4.js"><link rel="prefetch" href="/docs/assets/js/48.56029a4f.js"><link rel="prefetch" href="/docs/assets/js/49.e08d178b.js"><link rel="prefetch" href="/docs/assets/js/5.d863f909.js"><link rel="prefetch" href="/docs/assets/js/50.5a5a4b6a.js"><link rel="prefetch" href="/docs/assets/js/51.7b36ed5d.js"><link rel="prefetch" href="/docs/assets/js/52.94fba455.js"><link rel="prefetch" href="/docs/assets/js/53.6bb3e6f0.js"><link rel="prefetch" href="/docs/assets/js/55.347ba130.js"><link rel="prefetch" href="/docs/assets/js/56.e6eb9fff.js"><link rel="prefetch" href="/docs/assets/js/57.238ae04d.js"><link rel="prefetch" href="/docs/assets/js/58.abd63072.js"><link rel="prefetch" href="/docs/assets/js/59.f7233c4a.js"><link rel="prefetch" href="/docs/assets/js/6.844fe8d6.js"><link rel="prefetch" href="/docs/assets/js/60.3885b46a.js"><link rel="prefetch" href="/docs/assets/js/61.9e07e6e3.js"><link rel="prefetch" href="/docs/assets/js/62.745a3a5a.js"><link rel="prefetch" href="/docs/assets/js/63.28e65d44.js"><link rel="prefetch" href="/docs/assets/js/64.590d79b4.js"><link rel="prefetch" href="/docs/assets/js/65.765f376c.js"><link rel="prefetch" href="/docs/assets/js/66.24a3ab41.js"><link rel="prefetch" href="/docs/assets/js/67.54d46eed.js"><link rel="prefetch" href="/docs/assets/js/68.2bec988d.js"><link rel="prefetch" href="/docs/assets/js/69.074d0454.js"><link rel="prefetch" href="/docs/assets/js/7.4934bc72.js"><link rel="prefetch" href="/docs/assets/js/70.87e953c0.js"><link rel="prefetch" href="/docs/assets/js/71.d0f2ad01.js"><link rel="prefetch" href="/docs/assets/js/72.d275ee56.js"><link rel="prefetch" href="/docs/assets/js/8.926c506c.js"><link rel="prefetch" href="/docs/assets/js/9.0c7328dd.js"><link rel="prefetch" href="/docs/assets/js/vendors~docsearch.c6292dad.js">
+    <link rel="stylesheet" href="/docs/assets/css/0.styles.37f3f459.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/docs/" class="home-link router-link-active"><img src="/docs/logo.svg" alt="XState Docs" class="logo"> <span class="site-name can-hide">XState Docs</span></a> <div class="links"><form id="search-form" role="search" class="algolia-search-wrapper search-box"><input id="algolia-search-input" class="search-query"></form> <nav class="nav-links can-hide"><div class="nav-item"><a href="https://xstate.js.org/api" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  API
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://xstate.js.org/viz" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  Visualizer
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://discord.gg/xtWgFTgvNV" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  Discord
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://github.com/davidkpiano/xstate/discussions" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  Community
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <a href="https://github.com/davidkpiano/xstate" target="_blank" rel="noopener noreferrer" class="repo-link">
+    GitHub
+    <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="https://xstate.js.org/api" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  API
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://xstate.js.org/viz" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  Visualizer
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://discord.gg/xtWgFTgvNV" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  Discord
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://github.com/davidkpiano/xstate/discussions" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  Community
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <a href="https://github.com/davidkpiano/xstate" target="_blank" rel="noopener noreferrer" class="repo-link">
+    GitHub
+    <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>About</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>Guides</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>Tutorials</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>Recipes</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>Packages</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/docs/packages/xstate-react/" class="sidebar-link">@xstate/react</a></li><li><a href="/docs/packages/xstate-vue/" class="sidebar-link">@xstate/vue</a></li><li><a href="/docs/packages/xstate-graph/" class="sidebar-link">@xstate/graph</a></li><li><a href="/docs/packages/xstate-fsm/" class="sidebar-link">@xstate/fsm</a></li><li><a href="/docs/packages/xstate-test/" class="sidebar-link">@xstate/test</a></li><li><a href="/docs/packages/xstate-immer/" class="sidebar-link">@xstate/immer</a></li><li><a href="/docs/packages/xstate-inspect/" class="sidebar-link">@xstate/inspect</a></li><li><a href="/docs/packages/xstate-svelte/" aria-current="page" class="active sidebar-link">@xstate/svelte</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/docs/packages/xstate-svelte/#quick-start" class="sidebar-link">Quick Start</a></li><li class="sidebar-sub-header"><a href="/docs/packages/xstate-svelte/#api" class="sidebar-link">API</a></li><li class="sidebar-sub-header"><a href="/docs/packages/xstate-svelte/#configuring-machines" class="sidebar-link">Configuring Machines</a></li><li class="sidebar-sub-header"><a href="/docs/packages/xstate-svelte/#matching-states" class="sidebar-link">Matching States</a></li><li class="sidebar-sub-header"><a href="/docs/packages/xstate-svelte/#persisted-and-rehydrated-state" class="sidebar-link">Persisted and Rehydrated State</a></li><li class="sidebar-sub-header"><a href="/docs/packages/xstate-svelte/#services" class="sidebar-link">Services</a></li></ul></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>Patterns</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>Examples</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="theme-default-content content__default"><h1 id="xstate-svelte"><a href="#xstate-svelte" class="header-anchor">#</a> @xstate/svelte</h1> <h2 id="quick-start"><a href="#quick-start" class="header-anchor">#</a> Quick Start</h2> <ol><li>Install <code>xstate</code> and <code>@xstate/svelte</code>:</li></ol> <div class="language-bash extra-class"><pre class="language-bash"><code><span class="token function">npm</span> i xstate @xstate/svelte
+</code></pre></div><p><strong>Via CDN</strong></p> <div class="language-html extra-class"><pre class="language-html"><code><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>script</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>https://unpkg.com/@xstate/svelte/dist/xstate-svelte.min.js<span class="token punctuation">&quot;</span></span><span class="token punctuation">&gt;</span></span><span class="token script"></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>script</span><span class="token punctuation">&gt;</span></span>
+</code></pre></div><p>By using the global variable <code>XStateSvelte</code></p> <p>or</p> <div class="language-html extra-class"><pre class="language-html"><code><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>script</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>https://unpkg.com/@xstate/svelte/dist/xstate-svelte.fsm.min.js<span class="token punctuation">&quot;</span></span><span class="token punctuation">&gt;</span></span><span class="token script"></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>script</span><span class="token punctuation">&gt;</span></span>
+</code></pre></div><p>By using the global variable <code>XStateSvelteFSM</code></p> <ol start="2"><li>Import <code>useMachine</code></li></ol> <div class="language-svelte extra-class"><pre class="language-text"><code>&lt;script&gt;
+  import { useMachine } from '@xstate/svelte';
+  import { createMachine } from 'xstate';
+
+  const toggleMachine = createMachine({
+    id: 'toggle',
+    initial: 'inactive',
+    states: {
+      inactive: {
+        on: { TOGGLE: 'active' }
+      },
+      active: {
+        on: { TOGGLE: 'inactive' }
+      }
+    }
+  });
+
+  const { state, send } = useMachine(toggleMachine);
+&lt;/script&gt;
+
+&lt;button on:click={() =&gt; send('TOGGLE')}&gt;
+  {$state.value === 'inactive'
+    ? 'Click to activate'
+    : 'Active! Click to deactivate'}
+&lt;/button&gt;
+</code></pre></div><h2 id="api"><a href="#api" class="header-anchor">#</a> API</h2> <h3 id="usemachine-machine-options"><a href="#usemachine-machine-options" class="header-anchor">#</a> <code>useMachine(machine, options?)</code></h3> <p>A function that interprets the given <code>machine</code> and starts a service that runs for the lifetime of the component.</p> <p><strong>Arguments</strong></p> <ul><li><code>machine</code> - An <a href="https://xstate.js.org/docs/guides/machines.html" target="_blank" rel="noopener noreferrer">XState machine<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a>.</li> <li><code>options</code> (optional) - <a href="https://xstate.js.org/docs/guides/interpretation.html#options" target="_blank" rel="noopener noreferrer">Interpreter options<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a> OR one of the following Machine Config options: <code>guards</code>, <code>actions</code>, <code>activities</code>, <code>services</code>, <code>delays</code>, <code>immediate</code>, <code>context</code>, or <code>state</code>.</li></ul> <p><strong>Returns</strong> <code>{ state, send, service}</code>:</p> <ul><li><code>state</code> - A <a href="https://svelte.dev/docs#svelte_store" target="_blank" rel="noopener noreferrer">Svelte store<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a> representing the current state of the machine as an XState <code>State</code> object. You should reference the store value by prefixing with <code>$</code> i.e. <code>$state</code>.</li> <li><code>send</code> - A function that sends events to the running service.</li> <li><code>service</code> - The created service.</li></ul> <h3 id="usemachine-machine-with-xstate-fsm"><a href="#usemachine-machine-with-xstate-fsm" class="header-anchor">#</a> <code>useMachine(machine)</code> with <code>@xstate/fsm</code></h3> <p>A function that interprets the given finite state <code>machine</code> from [<code>@xstate/fsm</code>] and starts a service that runs for the lifetime of the component.</p> <p>This special <code>useMachine</code> hook is imported from <code>@xstate/svelte/lib/fsm</code></p> <p><strong>Arguments</strong></p> <ul><li><code>machine</code> - An <a href="https://xstate.js.org/docs/packages/xstate-fsm/" target="_blank" rel="noopener noreferrer">XState finite state machine (FSM)<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a>.</li></ul> <p><strong>Returns</strong> an object <code>{state, send, service}</code>:</p> <ul><li><code>state</code> - A <a href="https://svelte.dev/docs#svelte_store" target="_blank" rel="noopener noreferrer">Svelte store<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a> representing the current state of the machine as an <code>@xstate/fsm</code> <code>StateMachine.State</code> object. You should reference the store value by prefixing with <code>$</code> i.e. <code>$state</code>.</li> <li><code>send</code> - A function that sends events to the running service.</li> <li><code>service</code> - The created <code>@xstate/fsm</code> service.</li></ul> <p><strong>Example</strong></p> <div class="language-svelte extra-class"><pre class="language-text"><code>&lt;script&gt;
+  import { useMachine } from '@xstate/svelte/lib/fsm';
+  import { createMachine, assign } from '@xstate/fsm';
+
+  const fetchMachine = createMachine({
+    id: 'fetch',
+    initial: 'idle',
+    context: {
+      data: undefined
+    },
+    states: {
+      idle: {
+        on: { FETCH: 'loading' }
+      },
+      loading: {
+        entry: ['load'],
+        on: {
+          RESOLVE: {
+            target: 'success',
+            actions: assign({
+              data: (context, event) =&gt; event.data
+            })
+          }
+        }
+      },
+      success: {}
+    }
+  });
+
+  const onFetch = () =&gt; new Promise((res) =&gt; res('some data'));
+
+  const { state, send } = useMachine(fetchMachine, {
+    actions: {
+      load: () =&gt; {
+        onFetch().then((res) =&gt; {
+          send({ type: 'RESOLVE', data: res });
+        });
+      }
+    }
+  });
+&lt;/script&gt;
+
+{#if $state.value === 'idle'}
+  &lt;button on:click={() =&gt; send('FETCH')}&gt;Fetch&lt;/button&gt;
+{:else if $state.value === 'loading'}
+  &lt;div&gt;Loading...&lt;/div&gt;
+{:else if $state.value === 'success'}
+  &lt;div&gt;
+    Success! Data: &lt;div data-testid=&quot;data&quot;&gt;{$state.context.data}&lt;/div&gt;
+  &lt;/div&gt;
+{/if}
+</code></pre></div><h2 id="configuring-machines"><a href="#configuring-machines" class="header-anchor">#</a> Configuring Machines</h2> <p>Existing machines can be configured by passing the machine options as the 2nd argument of <code>useMachine(machine, options)</code>.</p> <p>Example: the <code>'fetchData'</code> service and <code>'notifySuccess'</code> action are both configurable:</p> <div class="language-svelte extra-class"><pre class="language-text"><code>&lt;script&gt;
+  import { useMachine } from '@xstate/svelte';
+  import { createMachine, assign } from 'xstate';
+
+  const fetchMachine = createMachine({
+    id: 'fetch',
+    initial: 'idle',
+    context: {
+      data: undefined,
+      error: undefined
+    },
+    states: {
+      idle: {
+        on: { FETCH: 'loading' }
+      },
+      loading: {
+        invoke: {
+          src: 'fetchData',
+          onDone: {
+            target: 'success',
+            actions: assign({
+              data: (_, event) =&gt; event.data
+            })
+          },
+          onError: {
+            target: 'failure',
+            actions: assign({
+              error: (_, event) =&gt; event.data
+            })
+          }
+        }
+      },
+      success: {
+        entry: 'notifySuccess',
+        type: 'final'
+      },
+      failure: {
+        on: {
+          RETRY: 'loading'
+        }
+      }
+    }
+  });
+
+  const onResolve = (data) =&gt; {
+    // Do something with data
+  };
+
+  const { state, send } = useMachine(fetchMachine, {
+    actions: {
+      notifySuccess: (context) =&gt; onResolve(context.data)
+    },
+    services: {
+      fetchData: (_, event) =&gt;
+        fetch(`some/api/${event.query}`).then((res) =&gt; res.json())
+    }
+  });
+&lt;/script&gt;
+
+{#if $state.value === 'idle'}
+  &lt;button on:click={() =&gt; send('FETCH', { query: 'something' })}&gt;
+    Search for something
+  &lt;/button&gt;
+{:else if $state.value === 'loading'}
+  &lt;div&gt;Searching...&lt;/div&gt;
+{:else if $state.value === 'success'}
+  &lt;div&gt;Success! Data: {$state.context.data}&lt;/div&gt;
+{:else if $state.value === 'failure'}
+  &lt;p&gt;{$state.context.error.message}&lt;/p&gt;
+  &lt;button on:click={() =&gt; send('RETRY')}&gt;Retry&lt;/button&gt;
+{/if}
+</code></pre></div><h2 id="matching-states"><a href="#matching-states" class="header-anchor">#</a> Matching States</h2> <p>When using <a href="https://xstate.js.org/docs/guides/hierarchical.html" target="_blank" rel="noopener noreferrer">hierarchical<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a> and <a href="https://xstate.js.org/docs/guides/parallel.html" target="_blank" rel="noopener noreferrer">parallel<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a> machines, the state values will be objects, not strings. In this case, it is best to use <a href="https://xstate.js.org/docs/guides/states.html#state-methods-and-properties" target="_blank" rel="noopener noreferrer"><code>state.matches(...)</code><span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a>.</p> <div class="language-svelte extra-class"><pre class="language-text"><code>{#if $state.matches('idle')}
+  //
+{:else if $state.matches({ loading: 'user' })}
+  //
+{:else if $state.matches({ loading: 'friends' })}
+  //
+{/if}
+</code></pre></div><h2 id="persisted-and-rehydrated-state"><a href="#persisted-and-rehydrated-state" class="header-anchor">#</a> Persisted and Rehydrated State</h2> <p>You can persist and rehydrate state with <code>useMachine(...)</code> via <code>options.state</code>:</p> <div class="language-js extra-class"><pre class="language-js"><code><span class="token comment">// Get the persisted state config object from somewhere, e.g. localStorage</span>
+
+<span class="token keyword">const</span> persistedState <span class="token operator">=</span> <span class="token constant">JSON</span><span class="token punctuation">.</span><span class="token function">parse</span><span class="token punctuation">(</span>
+  localStorage<span class="token punctuation">.</span><span class="token function">getItem</span><span class="token punctuation">(</span><span class="token string">'some-persisted-state-key'</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> <span class="token punctuation">{</span> state<span class="token punctuation">,</span> send <span class="token punctuation">}</span> <span class="token operator">=</span> <span class="token function">useMachine</span><span class="token punctuation">(</span>someMachine<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  state<span class="token operator">:</span> persistedState
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// state will initially be that persisted state, not the machine's initialState</span>
+</code></pre></div><h2 id="services"><a href="#services" class="header-anchor">#</a> Services</h2> <p><code>XState</code> services implement the <a href="https://svelte.dev/docs#Store_contract" target="_blank" rel="noopener noreferrer">Svelte store contract<span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a>. Existing services and spawned actors can therefore be accessed directly and subscriptions are handled automatically by prefixing the service name with <code>$</code>.</p> <p><strong>Example</strong></p> <div class="language-js extra-class"><pre class="language-js"><code><span class="token comment">// service.js</span>
+
+<span class="token keyword">import</span> <span class="token punctuation">{</span> createMachine<span class="token punctuation">,</span> interpret <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'xstate'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> toggleMachine <span class="token operator">=</span> <span class="token function">createMachine</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+  id<span class="token operator">:</span> <span class="token string">'toggle'</span><span class="token punctuation">,</span>
+  initial<span class="token operator">:</span> <span class="token string">'inactive'</span><span class="token punctuation">,</span>
+  states<span class="token operator">:</span> <span class="token punctuation">{</span>
+    inactive<span class="token operator">:</span> <span class="token punctuation">{</span>
+      on<span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token constant">TOGGLE</span><span class="token operator">:</span> <span class="token string">'active'</span> <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    active<span class="token operator">:</span> <span class="token punctuation">{</span>
+      on<span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token constant">TOGGLE</span><span class="token operator">:</span> <span class="token string">'inactive'</span> <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">export</span> <span class="token keyword">const</span> toggleService <span class="token operator">=</span> <span class="token function">interpret</span><span class="token punctuation">(</span>toggleMachine<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre></div><div class="language-svelte extra-class"><pre class="language-text"><code>// App.svelte
+
+&lt;script&gt;
+  import { toggleService } from './service';
+&lt;/script&gt;
+
+&lt;button on:click={() =&gt; toggleService.send('TOGGLE')}&gt;
+  {$toggleService.value === 'inactive'
+    ? 'Click to activate'
+    : 'Active! Click to deactivate'}
+&lt;/button&gt;
+</code></pre></div></div> <footer class="page-edit"><div class="edit-link"><a href="https://github.com/davidkpiano/xstate/edit/master/docs/packages/xstate-svelte/index.md" target="_blank" rel="noopener noreferrer">Edit this page</a> <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></div> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">5/3/2021, 3:16:37 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/docs/packages/xstate-inspect/" class="prev">
+        @xstate/inspect
+      </a></span> <span class="next"><a href="/docs/patterns/sequence.html">
+        Sequence
+      </a>
+      →
+    </span></p></div> </main></div><div class="global-ui"></div></div>
+    <script src="/docs/assets/js/app.97d0efbd.js" defer></script><script src="/docs/assets/js/3.5679a708.js" defer></script><script src="/docs/assets/js/4.a24a4539.js" defer></script><script src="/docs/assets/js/54.ebe0ed37.js" defer></script>
+  </body>
+</html>
