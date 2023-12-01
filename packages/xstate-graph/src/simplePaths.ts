@@ -12,24 +12,29 @@ import {
   SerializedEvent,
   SerializedState,
   StatePath,
+  Steps,
   TraversalOptions,
   VisitedContext
 } from './types';
 import { resolveTraversalOptions, createDefaultMachineOptions } from './graph';
 import { getAdjacencyMap } from './adjacency';
+import { alterPath } from './alterPath';
+import { createMockActorScope } from './actorScope';
 
-export function getSimplePaths<
-  TLogic extends AnyActorLogic,
-  TState extends SnapshotFrom<TLogic>,
-  TEvent extends EventFromLogic<TLogic>
->(
+export function getSimplePaths<TLogic extends AnyActorLogic>(
   logic: TLogic,
-  options?: TraversalOptions<TState, TEvent>
-): Array<StatePath<TState, TEvent>> {
+  options?: TraversalOptions<
+    ReturnType<TLogic['transition']>,
+    EventFromLogic<TLogic>
+  >
+): Array<StatePath<ReturnType<TLogic['transition']>, EventFromLogic<TLogic>>> {
+  type TState = ReturnType<TLogic['transition']>;
+  type TEvent = EventFromLogic<TLogic>;
+
   const resolvedOptions = resolveTraversalOptions(logic, options);
-  const actorContext = { self: {} } as any; // TODO: figure out the simulation API
+  const actorScope = createMockActorScope();
   const fromState =
-    resolvedOptions.fromState ?? logic.getInitialState(actorContext, undefined);
+    resolvedOptions.fromState ?? logic.getInitialState(actorScope, undefined);
   const serializeState = resolvedOptions.serializeState as (
     ...args: Parameters<typeof resolvedOptions.serializeState>
   ) => SerializedState;
@@ -39,7 +44,7 @@ export function getSimplePaths<
     vertices: new Set(),
     edges: new Set()
   };
-  const path: any[] = [];
+  const steps: Steps<TState, TEvent> = [];
   const pathMap: Record<
     SerializedState,
     { state: TState; paths: Array<StatePath<TState, TEvent>> }
@@ -64,8 +69,8 @@ export function getSimplePaths<
 
       const path2: StatePath<TState, TEvent> = {
         state: fromState,
-        weight: path.length,
-        steps: [...path]
+        weight: steps.length,
+        steps: [...steps]
       };
 
       toStatePlan.paths.push(path2);
@@ -86,7 +91,7 @@ export function getSimplePaths<
 
         if (!visitCtx.vertices.has(nextStateSerial)) {
           visitCtx.edges.add(serializedEvent);
-          path.push({
+          steps.push({
             state: stateMap.get(fromStateSerial)!,
             event: subEvent
           });
@@ -95,7 +100,7 @@ export function getSimplePaths<
       }
     }
 
-    path.pop();
+    steps.pop();
     visitCtx.vertices.delete(fromStateSerial);
   }
 
@@ -109,8 +114,10 @@ export function getSimplePaths<
   const simplePaths = Object.values(pathMap).flatMap((p) => p.paths);
 
   if (resolvedOptions.toState) {
-    return simplePaths.filter((path) => resolvedOptions.toState!(path.state));
+    return simplePaths
+      .filter((path) => resolvedOptions.toState!(path.state))
+      .map(alterPath);
   }
 
-  return simplePaths;
+  return simplePaths.map(alterPath);
 }

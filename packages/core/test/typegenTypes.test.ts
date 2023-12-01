@@ -1,15 +1,13 @@
+import { fromCallback, fromPromise } from '../src/actors/index.ts';
+import { PromiseActorLogic } from '../src/actors/promise.ts';
+import { createMachine } from '../src/createMachine.ts';
 import {
-  ActorLogic,
   assign,
   createActor,
   MachineContext,
   StateMachine
 } from '../src/index.ts';
-import { fromPromise } from '../src/actors/index.ts';
-import { fromCallback } from '../src/actors/index.ts';
-import { createMachine } from '../src/Machine.ts';
 import { TypegenMeta } from '../src/typegenTypes.ts';
-import { PromiseActorLogic } from '../src/actors/promise.ts';
 
 describe('typegen types', () => {
   it('should not require implementations when creating machine using `createMachine`', () => {
@@ -126,44 +124,6 @@ describe('typegen types', () => {
             event.type === 'BAZ';
 
             return true;
-          }
-        }
-      }
-    );
-  });
-
-  it(`should limit event type provided to the actor's input factory`, () => {
-    interface TypesMeta extends TypegenMeta {
-      missingImplementations: {
-        actions: never;
-        delays: never;
-        guards: never;
-        actors: never;
-      };
-      eventsCausingActors: {
-        myActor: 'FOO' | 'BAR';
-      };
-    }
-
-    createMachine(
-      {
-        context: { foo: 100 },
-        types: {
-          typegen: {} as TypesMeta,
-          events: {} as { type: 'FOO' } | { type: 'BAR' } | { type: 'BAZ' }
-        }
-      },
-      {
-        actors: {
-          myActor: {
-            src: fromPromise(() => Promise.resolve(42)),
-            input: ({ event }) => {
-              event.type === 'FOO';
-              event.type === 'BAR';
-              // @ts-expect-error
-              event.type === 'BAZ';
-              return null;
-            }
           }
         }
       }
@@ -293,6 +253,12 @@ describe('typegen types', () => {
   it('should allow valid string `matches`', () => {
     interface TypesMeta extends TypegenMeta {
       matchesStates: 'a' | 'b' | 'c';
+      missingImplementations: {
+        actions: never;
+        delays: never;
+        guards: never;
+        actors: never;
+      };
     }
 
     const machine = createMachine({
@@ -313,6 +279,12 @@ describe('typegen types', () => {
   it('should allow valid object `matches`', () => {
     interface TypesMeta extends TypegenMeta {
       matchesStates: 'a' | { a: 'b' } | { a: 'c' };
+      missingImplementations: {
+        actions: never;
+        delays: never;
+        guards: never;
+        actors: never;
+      };
     }
 
     const machine = createMachine({
@@ -330,6 +302,12 @@ describe('typegen types', () => {
   it('should not allow invalid string `matches`', () => {
     interface TypesMeta extends TypegenMeta {
       matchesStates: 'a' | 'b' | 'c';
+      missingImplementations: {
+        actions: never;
+        actors: never;
+        delays: never;
+        guards: never;
+      };
     }
 
     const machine = createMachine({
@@ -344,13 +322,21 @@ describe('typegen types', () => {
       }
     });
 
-    // @ts-expect-error
-    createActor(machine).getSnapshot().matches('d');
+    createActor(machine).getSnapshot().matches(
+      // @ts-expect-error
+      'd'
+    );
   });
 
   it('should not allow invalid object `matches`', () => {
     interface TypesMeta extends TypegenMeta {
       matchesStates: 'a' | { a: 'b' } | { a: 'c' };
+      missingImplementations: {
+        actions: never;
+        actors: never;
+        delays: never;
+        guards: never;
+      };
     }
 
     const machine = createMachine({
@@ -362,13 +348,21 @@ describe('typegen types', () => {
       }
     });
 
-    // @ts-expect-error
-    createActor(machine).getSnapshot().matches({ a: 'd' });
+    createActor(machine).getSnapshot().matches({
+      // @ts-expect-error
+      a: 'd'
+    });
   });
 
   it('should allow a valid tag with `hasTag`', () => {
     interface TypesMeta extends TypegenMeta {
       tags: 'a' | 'b' | 'c';
+      missingImplementations: {
+        actions: never;
+        delays: never;
+        guards: never;
+        actors: never;
+      };
     }
 
     const machine = createMachine({
@@ -389,6 +383,12 @@ describe('typegen types', () => {
   it('should not allow an invalid tag with `hasTag`', () => {
     interface TypesMeta extends TypegenMeta {
       tags: 'a' | 'b' | 'c';
+      missingImplementations: {
+        actions: never;
+        delays: never;
+        guards: never;
+        actors: never;
+      };
     }
 
     const machine = createMachine({
@@ -403,8 +403,10 @@ describe('typegen types', () => {
       }
     });
 
-    // @ts-expect-error
-    createActor(machine).getSnapshot().hasTag('d');
+    createActor(machine).getSnapshot().hasTag(
+      // @ts-expect-error
+      'd'
+    );
   });
 
   it('`withConfig` should require all missing implementations ', () => {
@@ -487,8 +489,7 @@ describe('typegen types', () => {
       }
     });
 
-    // TODO: rethink this; should probably be done as a linter rule instead
-    // @x-ts-expect-error
+    // @ts-expect-error
     createActor(machine);
   });
 
@@ -616,17 +617,17 @@ describe('typegen types', () => {
   it('should include generated dynamic internal event in the provided parameter if types.actors is not provided', () => {
     interface TypesMeta extends TypegenMeta {
       eventsCausingActions: {
-        myAction: 'done.invoke.myActor' | 'FOO';
+        myAction: 'xstate.done.actor.myActor' | 'FOO';
       };
       internalEvents: {
-        'done.invoke.myActor': {
-          type: 'done.invoke.myActor';
+        'xstate.done.actor.myActor': {
+          type: 'xstate.done.actor.myActor';
           output: unknown;
           __tip: 'Declare the type.';
         };
       };
       invokeSrcNameMap: {
-        myActor: 'done.invoke.myActor';
+        myActor: 'xstate.done.actor.myActor';
       };
     }
 
@@ -643,7 +644,7 @@ describe('typegen types', () => {
             if (event.type === 'FOO') {
               return;
             }
-            event.type === 'done.invoke.myActor';
+            event.type === 'xstate.done.actor.myActor';
             event.output;
             // indirectly check that it's not any
             // @ts-expect-error
@@ -657,17 +658,17 @@ describe('typegen types', () => {
   it('should use an event generated based on types.actors for a dynamic internal event over the generated fallback', () => {
     interface TypesMeta extends TypegenMeta {
       eventsCausingActions: {
-        myAction: 'done.invoke.myActor' | 'FOO';
+        myAction: 'xstate.done.actor.myActor' | 'FOO';
       };
       internalEvents: {
-        'done.invoke.myActor': {
-          type: 'done.invoke.myActor';
+        'xstate.done.actor.myActor': {
+          type: 'xstate.done.actor.myActor';
           output: unknown;
           __tip: 'Declare the type.';
         };
       };
       invokeSrcNameMap: {
-        myActor: 'done.invoke.myActor';
+        myActor: 'xstate.done.actor.myActor';
       };
     }
 
@@ -689,7 +690,7 @@ describe('typegen types', () => {
             if (event.type === 'FOO') {
               return;
             }
-            event.type === 'done.invoke.myActor';
+            event.type === 'xstate.done.actor.myActor';
             event.output;
             ((_accept: string) => {})(event.output);
           }
@@ -704,14 +705,14 @@ describe('typegen types', () => {
         myActor: 'FOO';
       };
       internalEvents: {
-        'done.invoke.myActor': {
-          type: 'done.invoke.myActor';
+        'xstate.done.actor.myActor': {
+          type: 'xstate.done.actor.myActor';
           output: unknown;
           __tip: 'Declare the type.';
         };
       };
       invokeSrcNameMap: {
-        myActor: 'done.invoke.myActor';
+        myActor: 'xstate.done.actor.myActor';
       };
     }
 
@@ -742,14 +743,14 @@ describe('typegen types', () => {
         myActor: 'FOO';
       };
       internalEvents: {
-        'done.invoke.myActor': {
-          type: 'done.invoke.myActor';
+        'xstate.done.actor.myActor': {
+          type: 'xstate.done.actor.myActor';
           output: unknown;
           __tip: 'Declare the type.';
         };
       };
       invokeSrcNameMap: {
-        myActor: 'done.invoke.myActor';
+        myActor: 'xstate.done.actor.myActor';
       };
     }
 
@@ -779,14 +780,14 @@ describe('typegen types', () => {
         myActor: 'FOO';
       };
       internalEvents: {
-        'done.invoke.myActor': {
-          type: 'done.invoke.myActor';
+        'xstate.done.actor.myActor': {
+          type: 'xstate.done.actor.myActor';
           output: unknown;
           __tip: 'Declare the type.';
         };
       };
       invokeSrcNameMap: {
-        myActor: 'done.invoke.myActor';
+        myActor: 'xstate.done.actor.myActor';
       };
     }
 
@@ -824,14 +825,14 @@ describe('typegen types', () => {
   //       myActor: 'FOO';
   //     };
   //     internalEvents: {
-  //       'done.invoke.myActor': {
-  //         type: 'done.invoke.myActor';
+  //       'xstate.done.actor.myActor': {
+  //         type: 'xstate.done.actor.myActor';
   //         output: unknown;
   //         __tip: 'Declare the type.';
   //       };
   //     };
   //     invokeSrcNameMap: {
-  //       myActor: 'done.invoke.myActor';
+  //       myActor: 'xstate.done.actor.myActor';
   //     };
   //   }
 
@@ -989,7 +990,7 @@ describe('typegen types', () => {
   // it('should error correctly for implementations called in response to internal events when there is no explicit event type', () => {
   //   interface TypesMeta extends TypegenMeta {
   //     eventsCausingActions: {
-  //       myAction: 'done.invoke.invocation';
+  //       myAction: 'xstate.done.actor.invocation';
   //     };
   //     eventsCausingActors: {
   //       myInvocation: 'xstate.init';
@@ -998,7 +999,7 @@ describe('typegen types', () => {
   //       'xstate.init': { type: 'xstate.init' };
   //     };
   //     invokeSrcNameMap: {
-  //       myInvocation: 'done.invoke.invocation';
+  //       myInvocation: 'xstate.done.actor.invocation';
   //     };
   //   }
 
@@ -1022,7 +1023,7 @@ describe('typegen types', () => {
   //       },
   //       actions: {
   //         myAction: (_context, event) => {
-  //           ((_accept: 'done.invoke.invocation') => {})(event.type);
+  //           ((_accept: 'xstate.done.actor.invocation') => {})(event.type);
   //           ((_accept: string) => {})(event.output);
   //           // @ts-expect-error
   //           ((_accept: number) => {})(event.output);
@@ -1035,6 +1036,12 @@ describe('typegen types', () => {
   it("shouldn't end up with `any` context after calling `state.matches`", () => {
     interface TypesMeta extends TypegenMeta {
       matchesStates: 'a' | 'b' | 'c';
+      missingImplementations: {
+        actions: never;
+        delays: never;
+        guards: never;
+        actors: never;
+      };
     }
 
     const machine = createMachine({
@@ -1059,7 +1066,13 @@ describe('typegen types', () => {
 
   it("shouldn't end up with `never` within a branch after two `state.matches` calls", () => {
     interface TypesMeta extends TypegenMeta {
-      matchesStates: 'a' | 'a.b';
+      matchesStates: 'a' | 'a.b' | { a?: 'b' };
+      missingImplementations: {
+        actions: never;
+        delays: never;
+        guards: never;
+        actors: never;
+      };
     }
 
     const machine = createMachine({
@@ -1076,7 +1089,7 @@ describe('typegen types', () => {
 
     const state = createActor(machine).getSnapshot();
 
-    if (state.matches('a') && state.matches('a.b')) {
+    if (state.matches('a') && state.matches({ a: 'b' })) {
       ((_accept: string) => {})(state.context.foo);
     }
   });
@@ -1088,7 +1101,19 @@ describe('typegen types', () => {
       TContext extends MachineContext,
       TEvent extends { type: string }
     >(
-      machine: StateMachine<TContext, TEvent, any, any, any, any, any, any, any>
+      machine: StateMachine<
+        TContext,
+        TEvent,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any
+      >
     ) {
       return machine;
     }

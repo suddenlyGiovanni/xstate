@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://xstate.js.org">
+  <a href="https://stately.ai/docs">
   <br />
 
   <picture>
@@ -27,27 +27,28 @@ It uses event-driven programming, state machines, statecharts, and the actor mod
 
 ---
 
-📖 [Read the documentation](https://stately.ai/docs/xstate)
+📖 [Read the documentation](https://stately.ai/docs)
 
 ➡️ [Create state machines with the Stately Editor](https://stately.ai/editor)
 
 🖥 [Download our VS Code extension](https://marketplace.visualstudio.com/items?itemName=statelyai.stately-vscode)
 
-📑 Adheres to the [SCXML specification](https://www.w3.org/TR/scxml/)
+📑 Inspired by the [SCXML specification](https://www.w3.org/TR/scxml/)
 
 💬 Chat on the [Stately Discord Community](https://discord.gg/xstate)
 
 ## Packages
 
-- 🤖 `xstate` - Core finite state machine and statecharts library + interpreter
-- [🔬 `@xstate/fsm`](https://github.com/statelyai/xstate/tree/main/packages/xstate-fsm) - Minimal finite state machine library
-- [📉 `@xstate/graph`](https://github.com/statelyai/xstate/tree/main/packages/xstate-graph) - Graph traversal utilities for XState
-- [⚛️ `@xstate/react`](https://github.com/statelyai/xstate/tree/main/packages/xstate-react) - React hooks and utilities for using XState in React applications
-- [💚 `@xstate/vue`](https://github.com/statelyai/xstate/tree/main/packages/xstate-vue) - Vue composition functions and utilities for using XState in Vue applications
-- [🎷 `@xstate/svelte`](https://github.com/statelyai/xstate/tree/main/packages/xstate-svelte) - Svelte utilities for using XState in Svelte applications
-- [🥏 `@xstate/solid`](https://github.com/statelyai/xstate/tree/main/packages/xstate-solid) - Solid hooks and utilities for using XState in Solid applications
-- [✅ `@xstate/test`](https://github.com/statelyai/xstate/tree/main/packages/xstate-test) - Model-Based-Testing utilities (using XState) for testing any software
-- [🔍 `@xstate/inspect`](https://github.com/statelyai/xstate/tree/main/packages/xstate-inspect) - Inspection utilities for XState
+| Package                                                                                       | Description                                                                  |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 🤖 `xstate`                                                                                   | Core finite state machine and statecharts library + interpreter              |
+| [📉 `@xstate/graph`](https://github.com/statelyai/xstate/tree/next/packages/xstate-graph)     | Graph traversal utilities for XState                                         |
+| [⚛️ `@xstate/react`](https://github.com/statelyai/xstate/tree/next/packages/xstate-react)     | React hooks and utilities for using XState in React applications             |
+| [💚 `@xstate/vue`](https://github.com/statelyai/xstate/tree/next/packages/xstate-vue)         | Vue composition functions and utilities for using XState in Vue applications |
+| [🎷 `@xstate/svelte`](https://github.com/statelyai/xstate/tree/next/packages/xstate-svelte)   | Svelte utilities for using XState in Svelte applications                     |
+| [🥏 `@xstate/solid`](https://github.com/statelyai/xstate/tree/next/packages/xstate-solid)     | Solid hooks and utilities for using XState in Solid applications             |
+| [✅ `@xstate/test`](https://github.com/statelyai/xstate/tree/next/packages/xstate-test)       | Model-Based-Testing utilities (using XState) for testing any software        |
+| [🔍 `@xstate/inspect`](https://github.com/statelyai/xstate/tree/next/packages/xstate-inspect) | Inspection utilities for XState                                              |
 
 ## Templates
 
@@ -81,7 +82,7 @@ const toggleMachine = createMachine({
     inactive: { on: { TOGGLE: 'active' } },
     active: {
       entry: assign({ count: ({ context }) => context.count + 1 }),
-      on: { TOGGLE: 'inactive' } }
+      on: { TOGGLE: 'inactive' }
     }
   }
 });
@@ -92,10 +93,10 @@ toggleActor.subscribe((state) => console.log(state.value, state.context));
 toggleActor.start();
 // => logs 'inactive', { count: 0 }
 
-toggleService.send({ type: 'TOGGLE' });
+toggleActor.send({ type: 'TOGGLE' });
 // => logs 'active', { count: 1 }
 
-toggleService.send({ type: 'TOGGLE' });
+toggleActor.send({ type: 'TOGGLE' });
 // => logs 'inactive', { count: 1 }
 ```
 
@@ -412,7 +413,13 @@ const previousState = paymentMachine.transition(reviewState, {
 
 Special thanks to the sponsors who support this open-source project:
 
-<a href="https://transloadit.com/"><img src="https://assets.transloadit.com/assets/images/logo-v2.svg" alt="Transloadit logo" width="200" /><br />Transloadit</a>
+<a href="https://transloadit.com/?utm_source=xstate&utm_medium=referral&utm_campaign=sponsorship&utm_content=github">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://assets.transloadit.com/assets/images/sponsorships/logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://assets.transloadit.com/assets/images/sponsorships/logo-default.svg">
+    <img src="https://assets.transloadit.com/assets/images/sponsorships/logo-default.svg" alt="Transloadit Logo">
+  </picture>
+</a>
 
 ## SemVer Policy
 

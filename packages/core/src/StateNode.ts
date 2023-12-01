@@ -1,4 +1,4 @@
-import type { State } from './State.ts';
+import { MachineSnapshot } from './State.ts';
 import type { StateMachine } from './StateMachine.ts';
 import { NULL_EVENT, STATE_DELIMITER } from './constants.ts';
 import { evaluateGuard } from './guards.ts';
@@ -11,11 +11,8 @@ import {
   getDelayedTransitions
 } from './stateUtils.ts';
 import type {
-  AnyActorLogic,
   DelayedTransitionDefinition,
   EventObject,
-  FinalStateNodeConfig,
-  HistoryStateNodeConfig,
   InitialTransitionDefinition,
   InvokeDefinition,
   MachineContext,
@@ -30,20 +27,21 @@ import type {
   UnknownAction,
   ParameterizedObject,
   AnyStateMachine,
-  AnyStateNodeConfig
+  AnyStateNodeConfig,
+  ProvidedActor,
+  NonReducibleUnknown,
+  EventDescriptor
 } from './types.ts';
 import {
   createInvokeId,
-  flatten,
   mapValues,
   toArray,
-  toInvokeConfig,
   toTransitionConfigArray
 } from './utils.ts';
 
 const EMPTY_OBJECT = {};
 
-const toSerializableActon = (action: UnknownAction) => {
+const toSerializableAction = (action: UnknownAction) => {
   if (typeof action === 'string') {
     return { type: action };
   }
@@ -122,22 +120,26 @@ export class StateNode<
   public machine: StateMachine<
     TContext,
     TEvent,
-    any, // actors
+    any, // children
+    any, // actor
+    any, // action
+    any, // guard
+    any, // delay
+    any, // tag
     any, // input
-    TODO, // output
-    TODO, // guards
-    TODO, // delays
-    TODO, // tags
-    TODO // types meta
+    any, // output
+    any // typegen
   >;
   /**
    * The meta data associated with this state node, which will be returned in State instances.
    */
   public meta?: any;
   /**
-   * The output data sent with the "done.state._id_" event if this is a final state node.
+   * The output data sent with the "xstate.done.state._id_" event if this is a final state node.
    */
-  public output?: Mapper<TContext, TEvent, any>;
+  public output?:
+    | Mapper<MachineContext, EventObject, unknown, EventObject>
+    | NonReducibleUnknown;
 
   /**
    * The order this state node appears. Corresponds to the implicit document order.
@@ -177,8 +179,8 @@ export class StateNode<
       (this.config.states && Object.keys(this.config.states).length
         ? 'compound'
         : this.config.history
-        ? 'history'
-        : 'atomic');
+          ? 'history'
+          : 'atomic');
     this.description = this.config.description;
 
     this.order = this.machine.idMap.size;
@@ -219,9 +221,7 @@ export class StateNode<
 
     this.meta = this.config.meta;
     this.output =
-      this.type === 'final'
-        ? (this.config as FinalStateNodeConfig<TContext, TEvent>).output
-        : undefined;
+      this.type === 'final' || !this.parent ? this.config.output : undefined;
     this.tags = toArray(config.tags).slice();
   }
 
@@ -251,13 +251,13 @@ export class StateNode<
         ? {
             target: this.initial.target,
             source: this,
-            actions: this.initial.actions.map(toSerializableActon),
+            actions: this.initial.actions.map(toSerializableAction),
             eventType: null as any,
             reenter: false,
             toJSON: () => ({
               target: this.initial!.target!.map((t) => `#${t.id}`),
               source: `#${this.id}`,
-              actions: this.initial!.actions.map(toSerializableActon),
+              actions: this.initial!.actions.map(toSerializableAction),
               eventType: null as any
             })
           }
@@ -269,10 +269,10 @@ export class StateNode<
       on: this.on,
       transitions: [...this.transitions.values()].flat().map((t) => ({
         ...t,
-        actions: t.actions.map(toSerializableActon)
+        actions: t.actions.map(toSerializableAction)
       })),
-      entry: this.entry.map(toSerializableActon),
-      exit: this.exit.map(toSerializableActon),
+      entry: this.entry.map(toSerializableAction),
+      exit: this.exit.map(toSerializableAction),
       meta: this.meta,
       order: this.order || -1,
       output: this.output,
@@ -293,35 +293,20 @@ export class StateNode<
     InvokeDefinition<
       TContext,
       TEvent,
+      ProvidedActor,
       ParameterizedObject,
       ParameterizedObject,
       string
     >
   > {
     return memo(this, 'invoke', () =>
-      toArray(this.config.invoke).map((invocable, i) => {
-        const generatedId = createInvokeId(this.id, i);
-        const invokeConfig = toInvokeConfig(invocable, generatedId);
-        const resolvedId = invokeConfig.id || generatedId;
-        const src = invokeConfig.src as string | AnyActorLogic;
-        const { systemId } = invokeConfig;
-
-        // TODO: resolving should not happen here
+      toArray(this.config.invoke).map((invokeConfig, i) => {
+        const { src, systemId } = invokeConfig;
+        const resolvedId = invokeConfig.id ?? createInvokeId(this.id, i);
         const resolvedSrc =
-          typeof src === 'string' ? src : !('type' in src) ? resolvedId : src;
-
-        if (
-          !this.machine.implementations.actors[resolvedId] &&
-          typeof src !== 'string' &&
-          !('type' in src)
-        ) {
-          this.machine.implementations.actors = {
-            ...this.machine.implementations.actors,
-            // TODO: this should accept `src` as-is
-            [resolvedId]: src
-          };
-        }
-
+          typeof src === 'string'
+            ? src
+            : `xstate.invoke.${createInvokeId(this.id, i)}`;
         return {
           ...invokeConfig,
           src: resolvedSrc,
@@ -339,6 +324,7 @@ export class StateNode<
         } as InvokeDefinition<
           TContext,
           TEvent,
+          ProvidedActor,
           ParameterizedObject,
           ParameterizedObject,
           string
@@ -356,11 +342,14 @@ export class StateNode<
 
       return [...transitions]
         .flatMap(([descriptor, t]) => t.map((t) => [descriptor, t] as const))
-        .reduce((map: any, [descriptor, transition]) => {
-          map[descriptor] = map[descriptor] || [];
-          map[descriptor].push(transition);
-          return map;
-        }, {} as TransitionDefinitionMap<TContext, TEvent>);
+        .reduce(
+          (map: any, [descriptor, transition]) => {
+            map[descriptor] = map[descriptor] || [];
+            map[descriptor].push(transition);
+            return map;
+          },
+          {} as TransitionDefinitionMap<TContext, TEvent>
+        );
     });
   }
 
@@ -374,12 +363,12 @@ export class StateNode<
 
   public get initial(): InitialTransitionDefinition<TContext, TEvent> {
     return memo(this, 'initial', () =>
-      formatInitialTransition(this, this.config.initial || [])
+      formatInitialTransition(this, this.config.initial)
     );
   }
 
   public next(
-    state: State<TContext, TEvent, TODO, TODO, TODO, TODO>,
+    snapshot: MachineSnapshot<TContext, TEvent, any, any, any, any>,
     event: TEvent
   ): TransitionDefinition<TContext, TEvent>[] | undefined {
     const eventType = event.type;
@@ -395,21 +384,26 @@ export class StateNode<
 
     for (const candidate of candidates) {
       const { guard } = candidate;
-      const resolvedContext = state.context;
+      const resolvedContext = snapshot.context;
 
       let guardPassed = false;
 
       try {
         guardPassed =
           !guard ||
-          evaluateGuard<TContext, TEvent>(guard, resolvedContext, event, state);
+          evaluateGuard<TContext, TEvent>(
+            guard,
+            resolvedContext,
+            event,
+            snapshot
+          );
       } catch (err: any) {
         const guardType =
           typeof guard === 'string'
             ? guard
             : typeof guard === 'object'
-            ? guard.type
-            : undefined;
+              ? guard.type
+              : undefined;
         throw new Error(
           `Unable to evaluate guard ${
             guardType ? `'${guardType}' ` : ''
@@ -430,37 +424,9 @@ export class StateNode<
   }
 
   /**
-   * The target state value of the history state node, if it exists. This represents the
-   * default state value to transition to if no history value exists yet.
-   */
-  public get target(): string | undefined {
-    if (this.type === 'history') {
-      const historyConfig = this.config as HistoryStateNodeConfig<
-        TContext,
-        TEvent
-      >;
-      return historyConfig.target;
-    }
-
-    return undefined;
-  }
-
-  /**
-   * All the state node IDs of this state node and its descendant state nodes.
-   */
-  public get stateIds(): string[] {
-    const childStateIds = flatten(
-      Object.keys(this.states).map((stateKey) => {
-        return this.states[stateKey].stateIds;
-      })
-    );
-    return [this.id].concat(childStateIds);
-  }
-
-  /**
    * All the event types accepted by this state node and its descendants.
    */
-  public get events(): Array<TEvent['type']> {
+  public get events(): Array<EventDescriptor<TEvent>> {
     return memo(this, 'events', () => {
       const { states } = this;
       const events = new Set(this.ownEvents);
@@ -485,7 +451,7 @@ export class StateNode<
    *
    * Excludes any inert events.
    */
-  public get ownEvents(): Array<TEvent['type']> {
+  public get ownEvents(): Array<EventDescriptor<TEvent>> {
     const events = new Set(
       [...this.transitions.keys()].filter((descriptor) => {
         return this.transitions

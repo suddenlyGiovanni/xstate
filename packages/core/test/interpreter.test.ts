@@ -5,16 +5,13 @@ import {
   sendParent,
   StateValue,
   createMachine,
-  ActorStatus,
   ActorRefFrom,
   ActorRef,
   cancel,
   raise,
-  stop,
+  stopChild,
   log
 } from '../src/index.ts';
-import { State } from '../src/State';
-import { isObservable } from '../src/utils';
 import { interval, from } from 'rxjs';
 import { fromObservable } from '../src/actors/observable';
 import { PromiseActorLogic, fromPromise } from '../src/actors/promise';
@@ -138,8 +135,8 @@ describe('interpreter', () => {
 
       actorRef.send({ type: 'TIMER' });
       called = false;
-      const persisted = actorRef.getPersistedState();
-      actorRef = createActor(machine, { state: persisted }).start();
+      const persisted = actorRef.getPersistedSnapshot();
+      actorRef = createActor(machine, { snapshot: persisted }).start();
 
       expect(called).toBe(false);
     });
@@ -163,9 +160,9 @@ describe('interpreter', () => {
       const actorRef = createActor(machine).start();
       called = false;
       expect(actorRef.getSnapshot().value).toEqual('b');
-      const persisted = actorRef.getPersistedState();
+      const persisted = actorRef.getPersistedSnapshot();
 
-      createActor(machine, { state: persisted }).start();
+      createActor(machine, { snapshot: persisted }).start();
 
       expect(called).toBe(false);
     });
@@ -228,10 +225,11 @@ describe('interpreter', () => {
         | { type: 'ACTIVATE'; wait: number }
         | { type: 'FINISH' };
 
-      const delayExprMachine = createMachine<
-        DelayExprMachineCtx,
-        DelayExpMachineEvents
-      >({
+      const delayExprMachine = createMachine({
+        types: {} as {
+          context: DelayExprMachineCtx;
+          events: DelayExpMachineEvents;
+        },
         id: 'delayExpr',
         context: {
           initialDelay: 100
@@ -309,10 +307,11 @@ describe('interpreter', () => {
             type: 'FINISH';
           };
 
-      const delayExprMachine = createMachine<
-        DelayExprMachineCtx,
-        DelayExpMachineEvents
-      >({
+      const delayExprMachine = createMachine({
+        types: {} as {
+          context: DelayExprMachineCtx;
+          events: DelayExpMachineEvents;
+        },
         id: 'delayExpr',
         context: {
           initialDelay: 100
@@ -380,6 +379,9 @@ describe('interpreter', () => {
       const clock = new SimulatedClock();
       const letterMachine = createMachine(
         {
+          types: {} as {
+            events: { type: 'FIRE_DELAY'; value: number };
+          },
           id: 'letter',
           context: {
             delay: 100
@@ -387,12 +389,9 @@ describe('interpreter', () => {
           initial: 'a',
           states: {
             a: {
-              after: [
-                {
-                  delay: ({ context }) => context.delay,
-                  target: 'b'
-                }
-              ]
+              after: {
+                delayA: 'b'
+              }
             },
             b: {
               after: {
@@ -406,21 +405,12 @@ describe('interpreter', () => {
               }
             },
             d: {
-              after: [
-                {
-                  delay: ({ context, event }) =>
-                    context.delay + (event as any).value,
-                  target: 'e'
-                }
-              ]
+              after: {
+                delayD: 'e'
+              }
             },
             e: {
-              after: [
-                {
-                  delay: 'someDelay',
-                  target: 'f'
-                }
-              ]
+              after: { someDelay: 'f' }
             },
             f: {
               type: 'final'
@@ -431,7 +421,9 @@ describe('interpreter', () => {
           delays: {
             someDelay: ({ context }) => {
               return context.delay + 50;
-            }
+            },
+            delayA: ({ context }) => context.delay,
+            delayD: ({ context, event }) => context.delay + (event as any).value
           }
         }
       );
@@ -467,7 +459,9 @@ describe('interpreter', () => {
           initial: 'on',
           states: {
             on: {
-              invoke: 'myActivity',
+              invoke: {
+                src: 'myActivity'
+              },
               on: {
                 TURN_OFF: 'off'
               }
@@ -497,7 +491,9 @@ describe('interpreter', () => {
           initial: 'on',
           states: {
             on: {
-              invoke: 'myActivity',
+              invoke: {
+                src: 'myActivity'
+              },
               on: {
                 TURN_OFF: 'off'
               }
@@ -531,7 +527,9 @@ describe('interpreter', () => {
           initial: 'on',
           states: {
             on: {
-              invoke: 'myActivity',
+              invoke: {
+                src: 'myActivity'
+              },
               on: {
                 TURN_OFF: 'off'
               }
@@ -566,7 +564,7 @@ describe('interpreter', () => {
               on: { TOGGLE: 'active' }
             },
             active: {
-              invoke: 'blink',
+              invoke: { src: 'blink' },
               on: { TOGGLE: 'inactive' },
               initial: 'A',
               states: {
@@ -591,11 +589,11 @@ describe('interpreter', () => {
       const actorRef = createActor(machine).start();
       actorRef.send({ type: 'TOGGLE' });
       actorRef.send({ type: 'SWITCH' });
-      const bState = actorRef.getPersistedState();
+      const bState = actorRef.getPersistedSnapshot();
       actorRef.stop();
       activityActive = false;
 
-      createActor(machine, { state: bState }).start();
+      createActor(machine, { snapshot: bState }).start();
 
       expect(activityActive).toBeTruthy();
     });
@@ -661,44 +659,10 @@ describe('interpreter', () => {
     });
   });
 
-  it('should throw an error if an event is sent to an uninitialized interpreter if { deferEvents: false }', () => {
-    const service = createActor(lightMachine, {
-      clock: new SimulatedClock(),
-      deferEvents: false
-    });
+  it('should not throw an error if an event is sent to an uninitialized interpreter', () => {
+    const actorRef = createActor(lightMachine);
 
-    expect(() => service.send({ type: 'SOME_EVENT' })).toThrowError(
-      /uninitialized/
-    );
-
-    service.start();
-
-    expect(() => service.send({ type: 'SOME_EVENT' })).not.toThrow();
-  });
-
-  it('should not throw an error if an event is sent to an uninitialized interpreter if { deferEvents: true }', () => {
-    const service = createActor(lightMachine, {
-      clock: new SimulatedClock(),
-      deferEvents: true
-    });
-
-    expect(() => service.send({ type: 'SOME_EVENT' })).not.toThrow();
-
-    service.start();
-
-    expect(() => service.send({ type: 'SOME_EVENT' })).not.toThrow();
-  });
-
-  it('should not throw an error if an event is sent to an uninitialized interpreter (default options)', () => {
-    const service = createActor(lightMachine, {
-      clock: new SimulatedClock()
-    });
-
-    expect(() => service.send({ type: 'SOME_EVENT' })).not.toThrow();
-
-    service.start();
-
-    expect(() => service.send({ type: 'SOME_EVENT' })).not.toThrow();
+    expect(() => actorRef.send({ type: 'SOME_EVENT' })).not.toThrow();
   });
 
   it('should defer events sent to an uninitialized service', (done) => {
@@ -757,10 +721,11 @@ describe('interpreter', () => {
       }
     };
 
-    expect(() => {
-      createActor(createMachine(invalidMachine)).start();
-    }).toThrowErrorMatchingInlineSnapshot(
-      `"Initial state node "create" not found on parent state node #fetchMachine"`
+    const snapshot = createActor(createMachine(invalidMachine)).getSnapshot();
+
+    expect(snapshot.status).toBe('error');
+    expect(snapshot.error).toMatchInlineSnapshot(
+      `[Error: Initial state node "create" not found on parent state node #fetchMachine]`
     );
   });
 
@@ -783,7 +748,7 @@ describe('interpreter', () => {
     expect(console.warn).toMatchMockCallsInlineSnapshot(`
       [
         [
-          "Event "TIMER" was sent to stopped actor "x:0 (x:0)". This actor has already reached its final state, and will not transition.
+          "Event "TIMER" was sent to stopped actor "x:27 (x:27)". This actor has already reached its final state, and will not transition.
       Event: {"type":"TIMER"}",
         ],
       ]
@@ -793,7 +758,8 @@ describe('interpreter', () => {
   it('should be able to log (log action)', () => {
     const logs: any[] = [];
 
-    const logMachine = createMachine<{ count: number }>({
+    const logMachine = createMachine({
+      types: {} as { context: { count: number } },
       id: 'log',
       initial: 'x',
       context: { count: 0 },
@@ -862,7 +828,8 @@ describe('interpreter', () => {
       type: 'NEXT';
       password: string;
     }
-    const machine = createMachine<Ctx, Events>({
+    const machine = createMachine({
+      types: {} as { context: Ctx; events: Events },
       id: 'sendexpr',
       initial: 'start',
       context: {
@@ -871,7 +838,7 @@ describe('interpreter', () => {
       states: {
         start: {
           entry: raise(({ context }) => ({
-            type: 'NEXT',
+            type: 'NEXT' as const,
             password: context.password
           })),
           on: {
@@ -897,6 +864,10 @@ describe('interpreter', () => {
   describe('sendParent() event expressions', () => {
     it('should resolve sendParent event expressions', (done) => {
       const childMachine = createMachine({
+        types: {} as {
+          context: { password: string };
+          input: { password: string };
+        },
         id: 'child',
         initial: 'start',
         context: ({ input }) => ({
@@ -1082,7 +1053,7 @@ describe('interpreter', () => {
         }
       });
       const actor = createActor(machine, {
-        state: State.from('bar', undefined, machine)
+        snapshot: machine.resolveState({ value: 'bar' })
       });
 
       expect(actor.getSnapshot().matches('bar')).toBeTruthy();
@@ -1099,7 +1070,7 @@ describe('interpreter', () => {
         }
       });
       const actor = createActor(machine, {
-        state: machine.resolveStateValue('bar')
+        snapshot: machine.resolveState({ value: 'bar' })
       });
 
       expect(actor.getSnapshot().matches('bar')).toBeTruthy();
@@ -1122,7 +1093,7 @@ describe('interpreter', () => {
         }
       });
       const actor = createActor(machine, {
-        state: machine.resolveStateValue('foo')
+        snapshot: machine.resolveState({ value: 'foo' })
       });
 
       expect(actor.getSnapshot().matches({ foo: 'one' })).toBeTruthy();
@@ -1192,7 +1163,7 @@ describe('interpreter', () => {
         expect(console.warn).toMatchMockCallsInlineSnapshot(`
           [
             [
-              "Event "TRIGGER" was sent to stopped actor "x:0 (x:0)". This actor has already reached its final state, and will not transition.
+              "Event "TRIGGER" was sent to stopped actor "x:43 (x:43)". This actor has already reached its final state, and will not transition.
           Event: {"type":"TRIGGER"}",
             ],
           ]
@@ -1321,8 +1292,9 @@ describe('interpreter', () => {
 
   describe('observable', () => {
     const context = { count: 0 };
-    const intervalMachine = createMachine<typeof context>({
+    const intervalMachine = createMachine({
       id: 'interval',
+      types: {} as { context: typeof context },
       context,
       initial: 'active',
       states: {
@@ -1330,7 +1302,10 @@ describe('interpreter', () => {
           after: {
             10: {
               target: 'active',
-              actions: assign({ count: ({ context }) => context.count + 1 })
+              reenter: true,
+              actions: assign({
+                count: ({ context }) => context.count + 1
+              })
             }
           },
           always: {
@@ -1348,7 +1323,7 @@ describe('interpreter', () => {
       let count: number;
       const intervalService = createActor(intervalMachine).start();
 
-      expect(isObservable(intervalService)).toBeTruthy();
+      expect(typeof intervalService.subscribe === 'function').toBeTruthy();
 
       intervalService.subscribe(
         (state) => (count = state.context.count),
@@ -1382,7 +1357,8 @@ describe('interpreter', () => {
 
     it('should be unsubscribable', (done) => {
       const countContext = { count: 0 };
-      const machine = createMachine<typeof countContext>({
+      const machine = createMachine({
+        types: {} as { context: typeof countContext },
         context: countContext,
         initial: 'active',
         states: {
@@ -1614,27 +1590,41 @@ describe('interpreter', () => {
 
     it('state.children should reference invoked child actors (observable)', (done) => {
       const interval$ = interval(10);
+      const intervalLogic = fromObservable(() => interval$);
 
-      const parentMachine = createMachine({
-        initial: 'active',
-        states: {
-          active: {
-            invoke: {
-              id: 'childActor',
-              src: fromObservable(() => interval$),
-              onSnapshot: {
-                target: 'success',
-                guard: ({ event }) => {
-                  return event.data === 3;
+      const parentMachine = createMachine(
+        {
+          types: {} as {
+            actors: {
+              src: 'intervalLogic';
+              logic: typeof intervalLogic;
+            };
+          },
+          initial: 'active',
+          states: {
+            active: {
+              invoke: {
+                id: 'childActor',
+                src: 'intervalLogic',
+                onSnapshot: {
+                  target: 'success',
+                  guard: ({ event }) => {
+                    return event.snapshot.context === 3;
+                  }
                 }
               }
+            },
+            success: {
+              type: 'final'
             }
-          },
-          success: {
-            type: 'final'
+          }
+        },
+        {
+          actors: {
+            intervalLogic
           }
         }
-      });
+      );
 
       const service = createActor(parentMachine);
       service.subscribe({
@@ -1720,9 +1710,9 @@ describe('interpreter', () => {
               NEXT: {
                 target: 'gone',
                 actions: [
-                  stop(({ context }) => context.machineRef),
-                  stop(({ context }) => context.promiseRef),
-                  stop(({ context }) => context.observableRef)
+                  stopChild(({ context }) => context.machineRef),
+                  stopChild(({ context }) => context.promiseRef),
+                  stopChild(({ context }) => context.observableRef)
                 ]
               }
             }
@@ -1801,7 +1791,8 @@ describe('interpreter', () => {
 
     const service = createActor(machine).start();
 
-    expect(service.status).toBe(ActorStatus.Stopped);
+    expect(service.getSnapshot().status).toBe('done');
+
     service.subscribe({
       complete: () => {
         done();

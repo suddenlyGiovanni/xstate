@@ -1,75 +1,117 @@
-import { error } from './actions.ts';
-import { ActorStatus, createActor } from './interpreter.ts';
+import { createErrorActorEvent } from './eventUtils.ts';
+import { ProcessingStatus, createActor } from './interpreter.ts';
 import {
-  AnyActorContext,
+  ActorRefFrom,
+  AnyActorScope,
+  AnyActorLogic,
   AnyActorRef,
   AnyEventObject,
-  AnyState,
-  Spawner,
-  TODO
+  AnyMachineSnapshot,
+  InputFrom,
+  IsLiteralString,
+  ProvidedActor,
+  Snapshot,
+  TODO,
+  RequiredActorOptions,
+  IsNotNever,
+  ConditionalRequired
 } from './types.ts';
 import { resolveReferencedActor } from './utils.ts';
 
+type SpawnOptions<
+  TActor extends ProvidedActor,
+  TSrc extends TActor['src']
+> = TActor extends {
+  src: TSrc;
+}
+  ? ConditionalRequired<
+      [
+        options?: {
+          id?: TActor['id'];
+          systemId?: string;
+          input?: InputFrom<TActor['logic']>;
+          syncSnapshot?: boolean;
+        } & { [K in RequiredActorOptions<TActor>]: unknown }
+      ],
+      IsNotNever<RequiredActorOptions<TActor>>
+    >
+  : never;
+
+export type Spawner<TActor extends ProvidedActor> = IsLiteralString<
+  TActor['src']
+> extends true
+  ? <TSrc extends TActor['src']>(
+      logic: TSrc,
+      ...[options = {} as any]: SpawnOptions<TActor, TSrc>
+    ) => ActorRefFrom<(TActor & { src: TSrc })['logic']>
+  : // TODO: do not accept machines without all implementations
+    <TLogic extends AnyActorLogic | string>(
+      src: TLogic,
+      options?: {
+        id?: string;
+        systemId?: string;
+        input?: unknown;
+        syncSnapshot?: boolean;
+      }
+    ) => TLogic extends string ? AnyActorRef : ActorRefFrom<TLogic>;
+
 export function createSpawner(
-  actorContext: AnyActorContext,
-  { machine, context }: AnyState,
+  actorScope: AnyActorScope,
+  { machine, context }: AnyMachineSnapshot,
   event: AnyEventObject,
   spawnedChildren: Record<string, AnyActorRef>
-): Spawner {
-  const spawn: Spawner = (src, options = {}) => {
-    const { systemId } = options;
+): Spawner<any> {
+  const spawn: Spawner<any> = (src, options = {}) => {
+    const { systemId, input } = options;
     if (typeof src === 'string') {
-      const referenced = resolveReferencedActor(
-        machine.implementations.actors[src]
-      );
+      const logic = resolveReferencedActor(machine, src);
 
-      if (!referenced) {
+      if (!logic) {
         throw new Error(
           `Actor logic '${src}' not implemented in machine '${machine.id}'`
         );
       }
 
-      const input = 'input' in options ? options.input : referenced.input;
-
-      // TODO: this should also receive `src`
-      const actor = createActor(referenced.src, {
+      const actorRef = createActor(logic, {
         id: options.id,
-        parent: actorContext.self,
+        parent: actorScope.self,
+        syncSnapshot: options.syncSnapshot,
         input:
           typeof input === 'function'
             ? input({
                 context,
                 event,
-                self: actorContext.self
+                self: actorScope.self
               })
             : input,
+        src,
         systemId
       }) as any;
-      spawnedChildren[actor.id] = actor;
-      return actor;
+
+      spawnedChildren[actorRef.id] = actorRef;
+
+      return actorRef;
     } else {
-      // TODO: this should also receive `src`
-      return createActor(src, {
+      const actorRef = createActor(src, {
         id: options.id,
-        parent: actorContext.self,
+        parent: actorScope.self,
+        syncSnapshot: options.syncSnapshot,
         input: options.input,
+        src,
         systemId
       });
+
+      return actorRef;
     }
   };
   return (src, options) => {
     const actorRef = spawn(src, options) as TODO; // TODO: fix types
     spawnedChildren[actorRef.id] = actorRef;
-    actorContext.defer(() => {
-      if (actorRef.status === ActorStatus.Stopped) {
+    actorScope.defer(() => {
+      if (actorRef._processingStatus === ProcessingStatus.Stopped) {
         return;
       }
-      try {
-        actorRef.start?.();
-      } catch (err) {
-        actorContext.self.send(error(actorRef.id, err));
-        return;
-      }
+      actorRef.start();
     });
     return actorRef;
   };
