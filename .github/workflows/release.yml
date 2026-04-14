@@ -48,6 +48,12 @@ jobs:
       - name: Build
         run: pnpm build
         shell: bash
+      - name: Restore tracked files
+        run: git restore --source=HEAD --staged --worktree .
+        shell: bash
+      - name: Verify clean worktree
+        run: git diff --exit-code && git diff --cached --exit-code && test -z "$(git status --short)"
+        shell: bash
 
       - name: Create Release Pull Request or Publish to npm
         uses: changesets/action@v1
