@@ -12,7 +12,22 @@ permissions:
   id-token: write
 
 jobs:
+  verify:
+    if: github.repository == 'statelyai/xstate'
+
+    timeout-minutes: 20
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-setup
+      - uses: ./.github/actions/ci-checks
+
   release:
+    needs: verify
     permissions:
       contents: write # to create release (changesets/action)
       issues: write # to post issue comments (changesets/action)
@@ -30,7 +45,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/ci-setup
-      - uses: ./.github/actions/ci-checks
+      - name: Build
+        run: pnpm build
+        shell: bash
 
       - name: Create Release Pull Request or Publish to npm
         uses: changesets/action@v1
