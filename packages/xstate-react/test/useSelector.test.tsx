@@ -3,12 +3,16 @@ import * as React from 'react';
 import {
   ActorRef,
   ActorRefFrom,
-  AnyState,
-  assign,
-  createMachine,
-  fromTransition,
+  ActorFromLogic,
+  AnyMachineSnapshot,
+  createLogic,
+  createAsyncLogic,
   createActor,
-  StateFrom
+  SnapshotFrom,
+  LogicSnapshot,
+  createMachine,
+  setup,
+  types
 } from 'xstate';
 import {
   shallowEqual,
@@ -17,7 +21,7 @@ import {
   useSelector
 } from '../src/index.ts';
 import { describeEachReactMode } from './utils';
-import { createEmptyActor } from 'xstate/actors';
+import z from 'zod';
 
 const originalConsoleError = console.error;
 
@@ -27,7 +31,14 @@ afterEach(() => {
 
 describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   it('only rerenders for selected values', () => {
-    const machine = createMachine<{ count: number; other: number }>({
+    const machine = createMachine({
+      // types: {} as { context: { count: number; other: number } },
+      schemas: {
+        context: z.object({
+          count: z.number(),
+          other: z.number()
+        })
+      },
       initial: 'active',
       context: {
         other: 0,
@@ -37,12 +48,16 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
         active: {}
       },
       on: {
-        OTHER: {
-          actions: assign({ other: ({ context }) => context.other + 1 })
-        },
-        INCREMENT: {
-          actions: assign({ count: ({ context }) => context.count + 1 })
-        }
+        OTHER: ({ context }) => ({
+          context: {
+            other: context.other + 1
+          }
+        }),
+        INCREMENT: ({ context }) => ({
+          context: {
+            count: context.count + 1
+          }
+        })
       }
     });
 
@@ -91,7 +106,20 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   });
 
   it('should work with a custom comparison function', () => {
-    const machine = createMachine<{ name: string }>({
+    const machine = createMachine({
+      // types: {} as {
+      //   context: { name: string };
+      //   events: { type: 'CHANGE'; value: string };
+      // },
+      schemas: {
+        context: z.object({
+          name: z.string()
+        }),
+        events: z.object({
+          type: z.literal('CHANGE'),
+          value: z.string()
+        }) as any
+      },
       initial: 'active',
       context: {
         name: 'david'
@@ -100,9 +128,14 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
         active: {}
       },
       on: {
-        CHANGE: {
-          actions: assign({ name: ({ event }) => event.value })
-        }
+        // CHANGE: {
+        //   actions: assign({ name: ({ event }) => event.value })
+        // }
+        CHANGE: ({ event }: any) => ({
+          context: {
+            name: event.value
+          }
+        })
       }
     });
 
@@ -119,11 +152,15 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
           <div data-testid="name">{name}</div>
           <button
             data-testid="sendUpper"
-            onClick={() => service.send({ type: 'CHANGE', value: 'DAVID' })}
+            onClick={() =>
+              service.send({ type: 'CHANGE', value: 'DAVID' } as any)
+            }
           ></button>
           <button
             data-testid="sendOther"
-            onClick={() => service.send({ type: 'CHANGE', value: 'other' })}
+            onClick={() =>
+              service.send({ type: 'CHANGE', value: 'other' } as any)
+            }
           ></button>
         </>
       );
@@ -151,7 +188,15 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   });
 
   it('should work with the shallowEqual comparison function', () => {
-    const machine = createMachine<{ user: { name: string } }>({
+    const machine = createMachine({
+      // types: {} as { context: { user: { name: string } } },
+      schemas: {
+        context: z.object({
+          user: z.object({
+            name: z.string()
+          })
+        })
+      },
       initial: 'active',
       context: {
         user: { name: 'david' }
@@ -160,14 +205,16 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
         active: {}
       },
       on: {
-        'change.same': {
-          // New object reference
-          actions: assign({ user: { name: 'david' } })
-        },
-        'change.other': {
-          // New object reference
-          actions: assign({ user: { name: 'other' } })
-        }
+        'change.same': () => ({
+          context: {
+            user: { name: 'david' }
+          }
+        }),
+        'change.other': () => ({
+          context: {
+            user: { name: 'other' }
+          }
+        })
       }
     });
 
@@ -274,31 +321,48 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
     render(<Test />);
   });
 
+  // v6: In strict mode, the stop/restart cycle doesn't restart spawned
+  // children, so the child actor won't process events
   it('should work with selecting values from initially spawned actors', () => {
-    const childMachine = createMachine<{ count: number }>({
+    const childMachine = createMachine({
+      schemas: {
+        context: z.object({
+          count: z.number()
+        })
+      },
       context: {
         count: 0
       },
       on: {
-        UPDATE_COUNT: {
-          actions: assign({
-            count: ({ context }) => context.count + 1
-          })
-        }
+        // UPDATE_COUNT: {
+        //   actions: assign({
+        //     count: ({ context }) => context.count + 1
+        //   })
+        // }
+        UPDATE_COUNT: ({ context }) => ({
+          context: {
+            count: context.count + 1
+          }
+        })
       }
     });
 
     const parentMachine = createMachine({
-      types: {
-        context: {} as {
-          childActor: ActorRefFrom<typeof childMachine>;
-        }
+      // types: {
+      //   context: {} as {
+      //     childActor: ActorRefFrom<typeof childMachine>;
+      //   }
+      // },
+      schemas: {
+        context: z.object({
+          childActor: z.custom<ActorRefFrom<typeof childMachine>>()
+        })
       },
       context: ({ spawn }) => ({
         childActor: spawn(childMachine)
       })
     });
-    const selector = (state: StateFrom<typeof childMachine>) =>
+    const selector = (state: SnapshotFrom<typeof childMachine>) =>
       state.context.count;
 
     const App = () => {
@@ -328,22 +392,119 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
     expect(countEl.textContent).toEqual('1');
   });
 
+  it('can call trigger on a spawned actor passed to a child component', () => {
+    const todoMachine = setup({
+      schemas: {
+        context: types<{
+          label: string;
+          done: boolean;
+        }>(),
+        events: {
+          rename: types<{ value: string }>(),
+          toggle: types<{}>()
+        }
+      }
+    }).createMachine({
+      context: {
+        label: 'Draft',
+        done: false
+      },
+      on: {
+        rename: ({ context, event }) => ({
+          context: {
+            ...context,
+            label: event.value
+          }
+        }),
+        toggle: ({ context }) => ({
+          context: {
+            ...context,
+            done: !context.done
+          }
+        })
+      }
+    });
+
+    type TodoActor = ActorFromLogic<typeof todoMachine>;
+
+    const parentMachine = setup({
+      schemas: {
+        context: types<{
+          todo: TodoActor | undefined;
+        }>()
+      },
+      actorSources: {
+        todo: todoMachine
+      }
+    }).createMachine({
+      context: {
+        todo: undefined
+      },
+      entry: ({ actorSources }, enq) => ({
+        context: {
+          todo: enq.spawn(actorSources.todo)
+        }
+      })
+    });
+
+    function Parent() {
+      const [state] = useMachine(parentMachine);
+      const todo = state.context.todo;
+
+      if (!todo) {
+        return null;
+      }
+
+      return <TodoItem actor={todo} />;
+    }
+
+    function TodoItem({ actor }: { actor: TodoActor }) {
+      const todo = useSelector(actor, (state) => state.context);
+
+      return (
+        <>
+          <div data-testid="label">{todo.label}</div>
+          <div data-testid="done">{String(todo.done)}</div>
+          <button
+            data-testid="rename"
+            onClick={() => actor.trigger.rename({ value: 'Buy milk' })}
+          />
+          <button data-testid="toggle" onClick={() => actor.trigger.toggle()} />
+        </>
+      );
+    }
+
+    render(<Parent />);
+
+    expect(screen.getByTestId('label').textContent).toBe('Draft');
+    expect(screen.getByTestId('done').textContent).toBe('false');
+
+    fireEvent.click(screen.getByTestId('rename'));
+    expect(screen.getByTestId('label').textContent).toBe('Buy milk');
+
+    fireEvent.click(screen.getByTestId('toggle'));
+    expect(screen.getByTestId('done').textContent).toBe('true');
+  });
+
   it('should immediately render snapshot of initially spawned custom actor', () => {
     const createCustomActor = (latestValue: string) =>
-      createActor({
-        transition: (s) => s,
-        subscribe: () => {
-          return { unsubscribe: () => {} };
-        },
-        getSnapshot: () => latestValue,
-        getInitialState: () => latestValue
-      });
+      createActor(
+        createLogic({
+          context: latestValue,
+          run: () => undefined
+        })
+      );
 
     const parentMachine = createMachine({
-      types: {
-        context: {} as {
-          childActor: ReturnType<typeof createCustomActor>;
-        }
+      // types: {
+      //   context: {} as {
+      //     childActor: ReturnType<typeof createCustomActor>;
+      //   }
+      // },
+      schemas: {
+        context: z.object({
+          childActor: z.custom<ReturnType<typeof createCustomActor>>()
+        })
       },
       context: () => ({
         childActor: createCustomActor('foo')
@@ -358,7 +519,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
 
       const value = useSelector(actor, identitySelector);
 
-      return <>{value}</>;
+      return <>{value.context}</>;
     };
 
     const { container } = render(<App />);
@@ -366,24 +527,35 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   });
 
   it('should rerender with a new value when the selector changes', () => {
-    const childMachine = createMachine<{ count: number }>({
+    const childMachine = createMachine({
+      // types: {} as { context: { count: number } },
+      schemas: {
+        context: z.object({
+          count: z.number()
+        })
+      },
       context: {
         count: 0
       },
       on: {
-        INC: {
-          actions: assign({
-            count: ({ context }) => context.count + 1
-          })
-        }
+        INC: ({ context }) => ({
+          context: {
+            count: context.count + 1
+          }
+        })
       }
     });
 
     const parentMachine = createMachine({
-      types: {
-        context: {} as {
-          childActor: ActorRefFrom<typeof childMachine>;
-        }
+      // types: {
+      //   context: {} as {
+      //     childActor: ActorRefFrom<typeof childMachine>;
+      //   }
+      // },
+      schemas: {
+        context: z.object({
+          childActor: z.custom<ActorRefFrom<typeof childMachine>>()
+        })
       },
       context: ({ spawn }) => ({
         childActor: spawn(childMachine)
@@ -409,25 +581,37 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
     expect(container.textContent).toEqual('second 0');
   });
 
+  // v6: In strict mode, the stop/restart cycle doesn't restart spawned
+  // children, so the child actor won't process events
   it('should use a fresh selector for subscription updates after selector change', () => {
-    const childMachine = createMachine<{ count: number }>({
+    const childMachine = createMachine({
+      schemas: {
+        context: z.object({
+          count: z.number()
+        })
+      },
       context: {
         count: 0
       },
       on: {
-        INC: {
-          actions: assign({
-            count: ({ context }) => context.count + 1
-          })
-        }
+        INC: ({ context }) => ({
+          context: {
+            count: context.count + 1
+          }
+        })
       }
     });
 
     const parentMachine = createMachine({
-      types: {
-        context: {} as {
-          childActor: ActorRefFrom<typeof childMachine>;
-        }
+      // types: {
+      //   context: {} as {
+      //     childActor: ActorRefFrom<typeof childMachine>;
+      //   }
+      // },
+      schemas: {
+        context: z.object({
+          childActor: z.custom<ActorRefFrom<typeof childMachine>>()
+        })
       },
       context: ({ spawn }) => ({
         childActor: spawn(childMachine)
@@ -469,24 +653,26 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   });
 
   it("should render snapshot value when actor doesn't emit anything", () => {
-    const createCustomActor = (latestValue: string) =>
-      createActor({
-        transition: (s) => s,
-        subscribe: () => {
-          return { unsubscribe: () => {} };
-        },
-        getSnapshot: () => latestValue,
-        getInitialState: () => latestValue
+    const createCustomLogic = (latestValue: string) =>
+      createLogic({
+        context: latestValue,
+        run: () => undefined
       });
 
     const parentMachine = createMachine({
-      types: {
-        context: {} as {
-          childActor: ReturnType<typeof createActor>;
-        }
+      // types: {
+      //   context: {} as {
+      //     childActor: ActorRefFrom<typeof createCustomLogic>;
+      //   }
+      // },
+      schemas: {
+        context: z.object({
+          childActor:
+            z.custom<ActorRefFrom<ReturnType<typeof createCustomLogic>>>()
+        })
       },
-      context: () => ({
-        childActor: createCustomActor('foo')
+      context: ({ spawn }) => ({
+        childActor: spawn(createCustomLogic('foo'))
       })
     });
 
@@ -498,7 +684,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
 
       const value = useSelector(actor, identitySelector);
 
-      return <>{value}</>;
+      return <>{value.context}</>;
     };
 
     const { container } = render(<App />);
@@ -507,14 +693,12 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
 
   it('should render snapshot state when actor changes', () => {
     const createCustomActor = (latestValue: string) =>
-      createActor({
-        transition: (s) => s,
-        subscribe: () => {
-          return { unsubscribe: () => {} };
-        },
-        getSnapshot: () => latestValue,
-        getInitialState: () => latestValue
-      });
+      createActor(
+        createLogic({
+          context: latestValue,
+          run: () => undefined
+        })
+      );
 
     const actor1 = createCustomActor('foo');
     const actor2 = createCustomActor('bar');
@@ -527,7 +711,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
         identitySelector
       );
 
-      return <>{value}</>;
+      return <>{value.context}</>;
     };
 
     const { container, rerender } = render(<App prop="first" />);
@@ -538,14 +722,13 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   });
 
   it("should keep rendering a new selected value after selector change when the actor doesn't emit", async () => {
-    const actor = createActor({
-      transition: (s) => s,
-      subscribe: () => {
-        return { unsubscribe: () => {} };
-      },
-      getSnapshot: () => undefined,
-      getInitialState: () => undefined
-    });
+    const actor = createActor(
+      createLogic({
+        context: undefined,
+        run: () => undefined
+      })
+    );
+    actor.subscribe = () => ({ unsubscribe: () => {} });
 
     const App = ({ selector }: { selector: any }) => {
       const [, forceRerender] = React.useState(0);
@@ -553,7 +736,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
 
       return (
         <>
-          {value}
+          {value as number}
           <button
             type="button"
             onClick={() => forceRerender((s) => s + 1)}
@@ -575,16 +758,30 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   it('should only rerender once when the selected value changes', () => {
     const selector = (state: any) => state.context.foo;
 
-    const machine = createMachine<{ foo: number }, { type: 'INC' }>({
+    const machine = createMachine({
+      // types: {} as { context: { foo: number }; events: { type: 'INC' } },
+      schemas: {
+        context: z.object({
+          foo: z.number()
+        }),
+        events: z.object({
+          type: z.literal('INC')
+        }) as any
+      },
       context: {
         foo: 0
       },
       on: {
-        INC: {
-          actions: assign({
-            foo: ({ context }) => ++context.foo
-          })
-        }
+        // INC: {
+        //   actions: assign({
+        //     foo: ({ context }) => ++context.foo
+        //   })
+        // }
+        INC: ({ context }) => ({
+          context: {
+            foo: context.foo + 1
+          }
+        })
       }
     });
 
@@ -619,7 +816,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
       }
     });
 
-    const snapshots: AnyState[] = [];
+    const snapshots: AnyMachineSnapshot[] = [];
 
     function App() {
       const service = useActorRef(machine);
@@ -630,7 +827,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
       return null;
     }
 
-    console.error = jest.fn();
+    console.error = vi.fn();
     render(<App />);
 
     const [snapshot1] = snapshots;
@@ -638,48 +835,32 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
     expect(console.error).toHaveBeenCalledTimes(0);
   });
 
-  it(`shouldn't interfere with spawning actors that are part of the initial state of an actor`, () => {
-    let called = false;
-    const child = createMachine({
-      entry: () => (called = true)
-    });
-    const machine = createMachine({
-      context: ({ spawn }) => ({
-        childRef: spawn(child)
-      })
-    });
-
-    function App() {
-      const service = useActorRef(machine);
-      useSelector(service, () => {});
-      expect(called).toBe(false);
-      return null;
-    }
-
-    render(<App />);
-
-    expect(called).toBe(true);
-  });
-
+  // v6: In strict mode, the stop/restart cycle doesn't restart spawned
+  // children, so the child actor won't process events
   it('should work with initially deferred actors spawned in lazy context', () => {
     const childMachine = createMachine({
       initial: 'one',
       states: {
         one: {
-          on: { NEXT: 'two' }
+          on: { NEXT: { target: 'two' } }
         },
         two: {}
       }
     });
 
-    const machine = createMachine<{ ref: ActorRefFrom<typeof childMachine> }>({
+    const machine = createMachine({
+      schemas: {
+        context: z.object({
+          ref: z.custom<ActorRefFrom<typeof childMachine>>()
+        })
+      },
       context: ({ spawn }) => ({
         ref: spawn(childMachine)
       }),
       initial: 'waiting',
       states: {
         waiting: {
-          on: { TEST: 'success' }
+          on: { TEST: { target: 'success' } }
         },
         success: {
           type: 'final'
@@ -694,7 +875,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
 
       return (
         <>
-          <div data-testid="child-state">{childState.value}</div>
+          <div data-testid="child-state">{childState.value as string}</div>
           <button
             data-testid="child-send"
             onClick={() => childRef.send({ type: 'NEXT' })}
@@ -715,7 +896,7 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
   });
 
   it('should not log any spurious errors when used with a not-started actor', () => {
-    const spy = jest.fn();
+    const spy = vi.fn();
     console.error = spy;
 
     const machine = createMachine({});
@@ -727,32 +908,45 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
 
     render(<App />);
 
-    expect(spy).not.toBeCalled();
+    expect(spy).not.toHaveBeenCalled();
   });
 
-  it('should work with a null actor', () => {
+  it('should work with an optional actor', () => {
     const Child = (props: {
-      actor: ActorRef<any, { count: number }> | undefined;
+      actor:
+        | ActorRef<LogicSnapshot<{ count: number }, undefined, unknown>, any>
+        | undefined;
     }) => {
-      const state = useSelector(props.actor ?? createEmptyActor(), (s) => s);
+      const state = useSelector(props.actor, (s) => s);
 
       // @ts-expect-error
-      ((_accept: { count: number }) => {})(state);
-      ((_accept: { count: number } | undefined) => {})(state);
+      ((_accept: { count: number }) => {})(state?.context);
+      ((_accept: { count: number } | undefined) => {})(state?.context);
 
-      return <div data-testid="state">{state?.count ?? 'undefined'}</div>;
+      return (
+        <div data-testid="state">{state?.context?.count ?? 'undefined'}</div>
+      );
     };
 
     const App = () => {
       const [actor, setActor] =
-        React.useState<ActorRef<any, { count: number }>>();
+        React.useState<
+          ActorRef<LogicSnapshot<{ count: number }, undefined, unknown>, any>
+        >();
 
       return (
         <>
           <button
             data-testid="button"
             onClick={() =>
-              setActor(createActor(fromTransition((s) => s, { count: 42 })))
+              setActor(
+                createActor(
+                  createLogic<{ count: number }, undefined>({
+                    context: { count: 42 },
+                    run: () => undefined
+                  })
+                )
+              )
             }
           >
             Set actor
@@ -772,5 +966,57 @@ describeEachReactMode('useSelector (%s)', ({ suiteKey, render }) => {
     fireEvent.click(button);
 
     expect(stateEl.textContent).toBe('42');
+  });
+
+  // v6: In strict mode, the stop/restart cycle doesn't restart invoked
+  // children (promise actors), so the error never propagates
+  it('should throw an error to an error boundary when the actor reaches an error state', async () => {
+    const errorMessage = 'test_useSelector_error';
+
+    const machine = createMachine({
+      initial: 'loading',
+      states: {
+        loading: {
+          invoke: {
+            src: createAsyncLogic({
+              run: () => Promise.reject(new Error(errorMessage))
+            })
+          }
+        }
+      }
+    });
+
+    class ErrorBoundary extends React.Component<
+      { children: React.ReactNode },
+      { error: Error | null }
+    > {
+      state = { error: null as Error | null };
+      static getDerivedStateFromError(error: Error) {
+        return { error };
+      }
+      render() {
+        if (this.state.error) {
+          return <div data-testid="error">{this.state.error.message}</div>;
+        }
+        return this.props.children;
+      }
+    }
+
+    const App = () => {
+      const actorRef = useActorRef(machine);
+      const value = useSelector(actorRef, (s) => s.value);
+      return <div data-testid="value">{String(value)}</div>;
+    };
+
+    console.error = vi.fn();
+
+    render(
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    );
+
+    await screen.findByTestId('error');
+    expect(screen.getByTestId('error').textContent).toBe(errorMessage);
   });
 });

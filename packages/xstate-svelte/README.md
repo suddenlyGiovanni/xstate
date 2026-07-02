@@ -2,7 +2,7 @@
 
 This package contains utilities for using [XState](https://github.com/statelyai/xstate) with [Svelte](https://github.com/sveltejs/svelte).
 
-- [Read the full documentation in the XState docs](https://xstate.js.org/docs/packages/xstate-svelte/).
+- [Read the full documentation in the XState docs](https://stately.ai/docs/xstate-svelte).
 - [Read our contribution guidelines](https://github.com/statelyai/xstate/blob/main/CONTRIBUTING.md).
 
 ## Quick Start
@@ -21,14 +21,6 @@ npm i xstate @xstate/svelte
 
 By using the global variable `XStateSvelte`
 
-or
-
-```html
-<script src="https://unpkg.com/@xstate/svelte/dist/xstate-svelte.fsm.min.js"></script>
-```
-
-By using the global variable `XStateSvelteFSM`
-
 2. Import `useMachine`
 
 ```svelte
@@ -41,10 +33,10 @@ By using the global variable `XStateSvelteFSM`
     initial: 'inactive',
     states: {
       inactive: {
-        on: { TOGGLE: 'active' }
+        on: { TOGGLE: { target: 'active' } }
       },
       active: {
-        on: { TOGGLE: 'inactive' }
+        on: { TOGGLE: { target: 'inactive' } }
       }
     }
   });

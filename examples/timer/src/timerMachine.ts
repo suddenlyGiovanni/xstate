@@ -1,6 +1,14 @@
-import { assign, createMachine, fromCallback } from 'xstate';
+import { createMachine, createCallbackLogic } from 'xstate';
 
 export const timerMachine = createMachine({
+  actorSources: {
+    ticks: createCallbackLogic(({ sendBack }) => {
+      const interval = setInterval(() => {
+        sendBack({ type: 'TICK' });
+      }, 1000);
+      return () => clearInterval(interval);
+    })
+  },
   types: {} as {
     events:
       | { type: 'start' }
@@ -17,51 +25,68 @@ export const timerMachine = createMachine({
   states: {
     stopped: {
       on: {
-        start: {
-          guard: ({ context }) => context.seconds > 0,
-          target: 'running'
+        start: ({ context, event, guards, actions }, enq) => {
+          if (!(({ context }) => context.seconds > 0)({ context, event })) {
+            return;
+          }
+          return { target: 'running' };
         },
-        minute: {
-          actions: assign({
-            seconds: ({ context }) => context.seconds + 60
-          })
+        minute: ({ context, event, guards, actions }, enq) => {
+          return {
+            context: {
+              ...context,
+              seconds: (({ context }) => context.seconds + 60)({
+                context: context,
+                event: event
+              })
+            }
+          };
         },
-        second: {
-          actions: assign({
-            seconds: ({ context }) => context.seconds + 1
-          })
+        second: ({ context, event, guards, actions }, enq) => {
+          return {
+            context: {
+              ...context,
+              seconds: (({ context }) => context.seconds + 1)({
+                context: context,
+                event: event
+              })
+            }
+          };
         }
       }
     },
     running: {
       invoke: {
-        src: fromCallback(({ sendBack }) => {
-          const interval = setInterval(() => {
-            sendBack({ type: 'TICK' });
-          }, 1000);
-          return () => clearInterval(interval);
-        })
+        src: 'ticks'
       },
       on: {
         stop: 'stopped',
-        TICK: {
-          actions: assign({
-            seconds: ({ context }) => context.seconds - 1
-          })
+        TICK: ({ context, event, guards, actions }, enq) => {
+          return {
+            context: {
+              ...context,
+              seconds: (({ context }) => context.seconds - 1)({
+                context: context,
+                event: event
+              })
+            }
+          };
         }
       },
-      always: {
-        guard: ({ context }) => context.seconds === 0,
-        target: 'stopped'
+      always: ({ context, event, guards, actions }, enq) => {
+        if (!(({ context }) => context.seconds === 0)({ context, event })) {
+          return;
+        }
+        return { target: 'stopped' };
       }
     }
   },
   on: {
-    reset: {
-      guard: ({ context }) => context.seconds > 0,
-      actions: assign({
-        seconds: 0
-      })
+    reset: ({ context, event, guards, actions }, enq) => {
+      if (!(({ context }) => context.seconds > 0)({ context, event })) {
+        return;
+      }
+      return { context: { ...context, seconds: 0 } };
     }
   }
 });

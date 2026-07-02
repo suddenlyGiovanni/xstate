@@ -1,7 +1,13 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createMachine, createActor } from '../src/index.ts';
-import { after } from '../src/actions.ts';
+import z from 'zod';
 
 const lightMachine = createMachine({
+  schemas: {
+    context: z.object({
+      canTurnGreen: z.boolean()
+    })
+  },
   id: 'light',
   initial: 'green',
   context: {
@@ -10,36 +16,118 @@ const lightMachine = createMachine({
   states: {
     green: {
       after: {
-        1000: 'yellow'
+        1000: { target: 'yellow' }
       }
     },
     yellow: {
       after: {
-        1000: [{ target: 'red' }]
+        1000: { target: 'red' }
       }
     },
     red: {
-      after: [{ delay: 1000, target: 'green' }]
+      after: {
+        1000: { target: 'green' }
+      }
     }
   }
 });
 
 afterEach(() => {
-  jest.useRealTimers();
+  vi.useRealTimers();
 });
 
 describe('delayed transitions', () => {
   it('should transition after delay', () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     const actorRef = createActor(lightMachine).start();
     expect(actorRef.getSnapshot().value).toBe('green');
 
-    jest.advanceTimersByTime(500);
+    vi.advanceTimersByTime(500);
     expect(actorRef.getSnapshot().value).toBe('green');
 
-    jest.advanceTimersByTime(510);
+    vi.advanceTimersByTime(510);
     expect(actorRef.getSnapshot().value).toBe('yellow');
+  });
+
+  it('should transition after an ISO8601 duration without a delay source', () => {
+    vi.useFakeTimers();
+
+    const actorRef = createActor(
+      createMachine({
+        initial: 'pending',
+        states: {
+          pending: {
+            after: {
+              'PT0.5S': { target: 'done' }
+            }
+          },
+          done: {}
+        }
+      })
+    ).start();
+
+    vi.advanceTimersByTime(499);
+    expect(actorRef.getSnapshot().value).toBe('pending');
+
+    vi.advanceTimersByTime(1);
+    expect(actorRef.getSnapshot().value).toBe('done');
+  });
+
+  it('should prefer a delay source value over the parsed ISO8601 duration', () => {
+    vi.useFakeTimers();
+
+    const actorRef = createActor(
+      createMachine({
+        delays: {
+          PT1S: 20
+        },
+        initial: 'pending',
+        states: {
+          pending: {
+            after: {
+              PT1S: { target: 'done' }
+            }
+          },
+          done: {}
+        }
+      })
+    ).start();
+
+    vi.advanceTimersByTime(19);
+    expect(actorRef.getSnapshot().value).toBe('pending');
+
+    vi.advanceTimersByTime(2);
+    expect(actorRef.getSnapshot().value).toBe('done');
+  });
+
+  it('should not try to clear an undefined timeout when exiting source state of a delayed transition', async () => {
+    // https://github.com/statelyai/xstate/issues/5001
+    const spy = vi.fn();
+
+    const machine = createMachine({
+      initial: 'green',
+      states: {
+        green: {
+          after: {
+            1: { target: 'yellow' }
+          }
+        },
+        yellow: {}
+      }
+    });
+
+    const actorRef = createActor(machine, {
+      clock: {
+        setTimeout,
+        clearTimeout: spy
+      }
+    }).start();
+
+    // when the after transition gets executed it tries to clear its own timer when exiting its source state
+    await sleep(5);
+    expect(actorRef.getSnapshot().value).toBe('yellow');
+    expect(spy.mock.calls.length).toBe(0);
   });
 
   it('should format transitions properly', () => {
@@ -47,10 +135,16 @@ describe('delayed transitions', () => {
 
     const transitions = greenNode.transitions;
 
-    expect([...transitions.keys()]).toEqual([after(1000, greenNode.id)]);
+    expect([...transitions.keys()]).toMatchInlineSnapshot(`
+      [
+        "xstate.after.1000.light.green",
+      ]
+    `);
   });
 
-  it('should be able to transition with delay from nested initial state', (done) => {
+  it('should be able to transition with delay from nested initial state', () => {
+    const { resolve, promise } = Promise.withResolvers<void>();
+
     const machine = createMachine({
       initial: 'nested',
       states: {
@@ -59,7 +153,7 @@ describe('delayed transitions', () => {
           states: {
             wait: {
               after: {
-                10: '#end'
+                10: { target: '#end' }
               }
             }
           }
@@ -74,31 +168,42 @@ describe('delayed transitions', () => {
     const actor = createActor(machine);
     actor.subscribe({
       complete: () => {
-        done();
+        resolve();
       }
     });
     actor.start();
+
+    return promise;
   });
 
-  it('parent state should enter child state without re-entering self (relative target)', (done) => {
+  it('parent state should enter child state without re-entering self (relative target)', () => {
+    const { resolve, promise } = Promise.withResolvers<void>();
+
     const actual: string[] = [];
+
     const machine = createMachine({
       initial: 'one',
       states: {
         one: {
           initial: 'two',
-          entry: () => actual.push('entered one'),
+          entry: (_, enq) => enq(() => actual.push('entered one')),
           states: {
             two: {
-              entry: () => actual.push('entered two')
+              entry: (_, enq) => {
+                enq(() => actual.push('entered two'));
+              }
             },
             three: {
-              entry: () => actual.push('entered three'),
-              always: '#end'
+              entry: (_, enq) => {
+                enq(() => actual.push('entered three'));
+              },
+              always: { target: '#end' }
             }
           },
           after: {
-            10: '.three'
+            10: () => {
+              return { target: '.three' };
+            }
           }
         },
         end: {
@@ -112,36 +217,46 @@ describe('delayed transitions', () => {
     actor.subscribe({
       complete: () => {
         expect(actual).toEqual(['entered one', 'entered two', 'entered three']);
-        done();
+        resolve();
       }
     });
     actor.start();
+
+    return promise;
   });
 
   it('should defer a single send event for a delayed conditional transition (#886)', () => {
-    jest.useFakeTimers();
-    const spy = jest.fn();
+    vi.useFakeTimers();
+    const spy = vi.fn();
     const machine = createMachine({
       initial: 'X',
       states: {
         X: {
           after: {
-            1: [
-              {
-                target: 'Y',
-                guard: () => true
-              },
-              {
-                target: 'Z'
+            // 1: [
+            //   {
+            //     target: 'Y',
+            //     guard: () => true
+            //   },
+            //   {
+            //     target: 'Z'
+            //   }
+            // ]
+            1: () => {
+              if (1 + 1 === 2) {
+                return { target: 'Y' };
+              } else {
+                return { target: 'Z' };
               }
-            ]
+            }
           }
         },
         Y: {
           on: {
-            '*': {
-              actions: spy
-            }
+            // '*': {
+            //   actions: spy
+            // }
+            '*': (_, enq) => enq(spy)
           }
         },
         Z: {}
@@ -150,18 +265,20 @@ describe('delayed transitions', () => {
 
     createActor(machine).start();
 
-    jest.advanceTimersByTime(10);
+    vi.advanceTimersByTime(10);
     expect(spy).not.toHaveBeenCalled();
   });
 
   // TODO: figure out correct behavior for restoring delayed transitions
-  it.skip('should execute an after transition after starting from a state resolved using `.getPersistedState`', (done) => {
+  it.skip('should execute an after transition after starting from a state resolved using `.getPersistedSnapshot`', () => {
+    const { resolve, promise } = Promise.withResolvers<void>();
+
     const machine = createMachine({
       id: 'machine',
       initial: 'a',
       states: {
         a: {
-          on: { next: 'withAfter' }
+          on: { next: { target: 'withAfter' } }
         },
 
         withAfter: {
@@ -178,26 +295,29 @@ describe('delayed transitions', () => {
 
     const actorRef1 = createActor(machine).start();
     actorRef1.send({ type: 'next' });
-    const withAfterState = actorRef1.getPersistedState();
+    const withAfterState = actorRef1.getPersistedSnapshot();
 
-    const actorRef2 = createActor(machine, { state: withAfterState });
-    actorRef2.subscribe({ complete: () => done() });
+    const actorRef2 = createActor(machine, { snapshot: withAfterState });
+    actorRef2.subscribe({ complete: () => resolve() });
     actorRef2.start();
+
+    return promise;
   });
 
-  it('should execute an after transition after starting from a persisted state', (done) => {
+  it('should execute an after transition after starting from a persisted state', () => {
+    const { resolve, promise } = Promise.withResolvers<void>();
     const createMyMachine = () =>
       createMachine({
         initial: 'A',
         states: {
           A: {
             on: {
-              NEXT: 'B'
+              NEXT: { target: 'B' }
             }
           },
           B: {
             after: {
-              1: 'C'
+              1: { target: 'C' }
             }
           },
           C: {
@@ -208,36 +328,43 @@ describe('delayed transitions', () => {
 
     let service = createActor(createMyMachine()).start();
 
-    const persistedState = JSON.parse(JSON.stringify(service.getSnapshot()));
+    const persistedSnapshot = JSON.parse(JSON.stringify(service.getSnapshot()));
 
-    service = createActor(createMyMachine(), { state: persistedState }).start();
+    service = createActor(createMyMachine(), {
+      snapshot: persistedSnapshot
+    }).start();
 
     service.send({ type: 'NEXT' });
 
-    service.subscribe({ complete: () => done() });
+    service.subscribe({ complete: () => resolve() });
+
+    return promise;
   });
 
   describe('delay expressions', () => {
     it('should evaluate the expression (function) to determine the delay', () => {
-      jest.useFakeTimers();
-      const spy = jest.fn();
+      vi.useFakeTimers();
+      const spy = vi.fn();
       const context = {
         delay: 500
       };
       const machine = createMachine({
         initial: 'inactive',
+        schemas: {
+          context: z.object({
+            delay: z.number()
+          })
+        },
         context,
+        delays: {
+          myDelay: ({ context }) => {
+            spy(context);
+            return context.delay;
+          }
+        },
         states: {
           inactive: {
-            after: [
-              {
-                delay: ({ context }) => {
-                  spy(context);
-                  return context.delay;
-                },
-                target: 'active'
-              }
-            ]
+            after: { myDelay: { target: 'active' } }
           },
           active: {}
         }
@@ -248,44 +375,42 @@ describe('delayed transitions', () => {
       expect(spy).toBeCalledWith(context);
       expect(actor.getSnapshot().value).toBe('inactive');
 
-      jest.advanceTimersByTime(300);
+      vi.advanceTimersByTime(300);
       expect(actor.getSnapshot().value).toBe('inactive');
 
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
       expect(actor.getSnapshot().value).toBe('active');
     });
 
     it('should evaluate the expression (string) to determine the delay', () => {
-      jest.useFakeTimers();
-      const spy = jest.fn();
-      const machine = createMachine(
-        {
-          initial: 'inactive',
-          states: {
-            inactive: {
-              on: {
-                ACTIVATE: 'active'
-              }
-            },
-            active: {
-              after: [
-                {
-                  delay: 'someDelay',
-                  target: 'inactive'
-                }
-              ]
-            }
+      vi.useFakeTimers();
+      const spy = vi.fn();
+      const machine = createMachine({
+        initial: 'inactive',
+        schemas: {
+          events: {
+            ACTIVATE: z.object({ delay: z.number() })
           }
         },
-        {
-          delays: {
-            someDelay: ({ event }) => {
-              spy(event);
-              return (event as any).delay;
+        delays: {
+          someDelay: ({ event }) => {
+            spy(event);
+            return event.delay;
+          }
+        },
+        states: {
+          inactive: {
+            on: {
+              ACTIVATE: { target: 'active' }
+            }
+          },
+          active: {
+            after: {
+              someDelay: { target: 'inactive' }
             }
           }
         }
-      );
+      });
 
       const actor = createActor(machine).start();
 
@@ -298,11 +423,86 @@ describe('delayed transitions', () => {
       expect(spy).toBeCalledWith(event);
       expect(actor.getSnapshot().value).toBe('active');
 
-      jest.advanceTimersByTime(300);
+      vi.advanceTimersByTime(300);
       expect(actor.getSnapshot().value).toBe('active');
 
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
       expect(actor.getSnapshot().value).toBe('inactive');
+    });
+  });
+
+  describe('stateNode in delay functions', () => {
+    it('should pass stateNode to delay expression', () => {
+      vi.useFakeTimers();
+      const spy = vi.fn();
+
+      const machine = createMachine({
+        initial: 'waiting',
+        schemas: {
+          context: z.object({
+            durations: z.record(z.number())
+          })
+        },
+        context: {
+          durations: {
+            waiting: 300,
+            active: 500
+          }
+        },
+        delays: {
+          phaseDuration: ({ context, stateNode }) => {
+            spy(stateNode.key);
+            return context.durations[stateNode.key];
+          }
+        },
+        states: {
+          waiting: {
+            after: { phaseDuration: { target: 'active' } }
+          },
+          active: {
+            after: { phaseDuration: { target: 'done' } }
+          },
+          done: { type: 'final' }
+        }
+      });
+
+      const actor = createActor(machine).start();
+
+      expect(spy).toHaveBeenCalledWith('waiting');
+      expect(actor.getSnapshot().value).toBe('waiting');
+
+      vi.advanceTimersByTime(300);
+      expect(actor.getSnapshot().value).toBe('active');
+      expect(spy).toHaveBeenCalledWith('active');
+
+      vi.advanceTimersByTime(500);
+      expect(actor.getSnapshot().value).toBe('done');
+    });
+
+    it('should pass stateNode with correct id', () => {
+      vi.useFakeTimers();
+      const spy = vi.fn();
+
+      const machine = createMachine({
+        id: 'test',
+        initial: 'a',
+        delays: {
+          myDelay: ({ stateNode }) => {
+            spy(stateNode.id);
+            return 100;
+          }
+        },
+        states: {
+          a: {
+            after: { myDelay: { target: 'b' } }
+          },
+          b: { type: 'final' }
+        }
+      });
+
+      createActor(machine).start();
+
+      expect(spy).toHaveBeenCalledWith('test.a');
     });
   });
 });

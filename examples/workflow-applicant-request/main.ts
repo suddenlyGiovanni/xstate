@@ -1,74 +1,83 @@
-import { createMachine, fromPromise, interpret } from 'xstate';
-
+import { createMachine, createActor, createAsyncLogic } from 'xstate';
+interface Applicant {
+  fname: string;
+  lname: string;
+  age: number;
+  email: string;
+}
 // https://github.com/serverlessworkflow/specification/tree/main/examples#applicant-request-decision-example
-export const workflow = createMachine(
-  {
-    id: 'applicantrequest',
-    types: {} as {
-      context: {
-        applicant: {
-          fname: string;
-          lname: string;
-          age: number;
-          email: string;
-        };
-      };
-    },
-    initial: 'CheckApplication',
-    context: ({ input }) => ({
-      applicant: input.applicant
-    }),
-    states: {
-      CheckApplication: {
-        always: [
-          {
-            guard: ({ context }) => context.applicant.age >= 18,
-            target: 'StartApplication'
-          },
-          {
-            target: 'RejectApplication'
-          }
-        ]
-      },
-      StartApplication: {
-        invoke: {
-          src: 'startApplicationWorkflowId',
-          onDone: 'End'
-        }
-      },
-      RejectApplication: {
-        invoke: {
-          src: 'sendRejectionEmailFunction',
-          input: ({ context }) => ({
-            applicant: context.applicant
-          }),
-          onDone: 'End'
-        }
-      },
-      End: {
-        type: 'final'
-      }
-    }
+export const workflow = createMachine({
+  types: {} as {
+    context: {
+      applicant: Applicant;
+    };
+    input: {
+      applicant: Applicant;
+    };
   },
-  {
-    actors: {
-      startApplicationWorkflowId: fromPromise(async () => {
+  actorSources: {
+    startApplicationWorkflowId: createAsyncLogic({
+      run: async () => {
         console.log('startApplicationWorkflowId workflow started');
-
         await new Promise((resolve) => setTimeout(resolve, 1000));
         console.log('startApplicationWorkflowId workflow completed');
-      }),
-      sendRejectionEmailFunction: fromPromise(async () => {
+      }
+    }),
+    sendRejectionEmailFunction: createAsyncLogic({
+      run: async () => {
         console.log('sendRejectionEmailFunction workflow started');
-
         await new Promise((resolve) => setTimeout(resolve, 1000));
         console.log('sendRejectionEmailFunction workflow completed');
-      })
+      }
+    })
+  },
+  guards: {
+    isOver18: ({ context }) => context.applicant.age >= 18
+  },
+  id: 'applicantrequest',
+  initial: 'CheckApplication',
+  context: ({ input }) => ({
+    applicant: input.applicant
+  }),
+  states: {
+    CheckApplication: {
+      on: {
+        Submit: [
+          ({ context, event, guards, actions }, enq) => {
+            if (!guards['isOver18']({ context, event })) {
+              return;
+            }
+            return { target: 'StartApplication', reenter: false };
+          },
+          {
+            target: 'RejectApplication',
+            reenter: false
+          }
+        ]
+      }
+    },
+    StartApplication: {
+      invoke: {
+        src: 'startApplicationWorkflowId',
+        onDone: 'End',
+        onError: 'RejectApplication'
+      }
+    },
+    RejectApplication: {
+      invoke: {
+        src: 'sendRejectionEmailFunction',
+        input: ({ context }) => ({
+          applicant: context.applicant
+        }),
+        onDone: 'End'
+      }
+    },
+    End: {
+      type: 'final'
     }
   }
-);
-
-const actor = interpret(workflow, {
+});
+const actor = createActor(workflow, {
   input: {
     applicant: {
       fname: 'John',
@@ -78,11 +87,13 @@ const actor = interpret(workflow, {
     }
   }
 });
-
 actor.subscribe({
   complete() {
     console.log('workflow completed', actor.getSnapshot().output);
   }
 });
-
 actor.start();
+process.stdin.on('data', (data) => {
+  const eventType = data.toString().trim();
+  actor.send({ type: eventType });
+});

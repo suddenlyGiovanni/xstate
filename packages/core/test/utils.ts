@@ -1,8 +1,8 @@
 import {
-  AnyState,
+  AnyMachineSnapshot,
   AnyStateMachine,
+  getNextSnapshot,
   matchesState,
-  StateNode,
   StateValue
 } from '../src/index.ts';
 
@@ -11,29 +11,30 @@ const resolveSerializedStateValue = (
   serialized: string
 ) =>
   serialized[0] === '{'
-    ? machine.resolveStateValue(JSON.parse(serialized), {})
-    : machine.resolveStateValue(serialized, {});
+    ? machine.resolveState({ value: JSON.parse(serialized), context: {} })
+    : machine.resolveState({ value: serialized, context: {} });
 
 export function testMultiTransition(
   machine: AnyStateMachine,
   fromState: string,
   eventTypes: string
-): AnyState {
-  const computeNext = (state: AnyState | string, eventType: string) => {
+): AnyMachineSnapshot {
+  const computeNext = (
+    state: AnyMachineSnapshot | string,
+    eventType: string
+  ) => {
     if (typeof state === 'string') {
       state = resolveSerializedStateValue(machine, state);
     }
-    const nextState = machine.transition(
-      state,
-      { type: eventType },
-      {} as any // TODO: figure out the simulation API
-    );
+    const nextState = getNextSnapshot(machine, state, {
+      type: eventType
+    });
     return nextState;
   };
 
   const [firstEventType, ...restEvents] = eventTypes.split(/,\s?/);
 
-  const resultState = restEvents.reduce<AnyState>(
+  const resultState = restEvents.reduce<AnyMachineSnapshot>(
     computeNext,
     computeNext(fromState, firstEventType)
   );
@@ -69,9 +70,15 @@ export function testAll(
   });
 }
 
-const seen = new WeakSet<AnyStateMachine>();
+type StateNodeLike = {
+  states: Record<string, StateNodeLike>;
+  path?: string[];
+  entry?: any;
+  exit?: any;
+};
+const seen = new WeakSet<StateNodeLike>();
 
-export function trackEntries(machine: AnyStateMachine) {
+export function trackEntries(machine: StateNodeLike & { root: StateNodeLike }) {
   if (seen.has(machine)) {
     throw new Error(`This helper can't accept the same machine more than once`);
   }
@@ -79,21 +86,22 @@ export function trackEntries(machine: AnyStateMachine) {
 
   let logs: string[] = [];
 
-  function addTrackingActions(
-    state: StateNode<any, any>,
-    stateDescription: string
-  ) {
-    state.entry.unshift(function __testEntryTracker() {
-      logs.push(`enter: ${stateDescription}`);
-    });
-    state.exit.unshift(function __testExitTracker() {
-      logs.push(`exit: ${stateDescription}`);
-    });
+  function addTrackingActions(state: StateNodeLike, stateDescription: string) {
+    const originalEntry2 = state.entry;
+    const originalExit2 = state.exit;
+    state.entry = (_: any, enq: any) => {
+      enq(() => logs.push(`enter: ${stateDescription}`));
+      return originalEntry2?.(_, enq);
+    };
+    state.exit = (_: any, enq: any) => {
+      enq(() => logs.push(`exit: ${stateDescription}`));
+      return originalExit2?.(_, enq);
+    };
   }
 
-  function addTrackingActionsRecursively(state: StateNode<any, any>) {
+  function addTrackingActionsRecursively(state: StateNodeLike) {
     for (const child of Object.values(state.states)) {
-      addTrackingActions(child, child.path.join('.'));
+      addTrackingActions(child, child.path!.join('.'));
       addTrackingActionsRecursively(child);
     }
   }

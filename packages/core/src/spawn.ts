@@ -1,76 +1,95 @@
-import { error } from './actions.ts';
-import { ActorStatus, createActor } from './interpreter.ts';
+import { ProcessingStatus, createActor } from './createActor.ts';
 import {
-  AnyActorContext,
+  ActorFromLogic,
+  AnyActorLogic,
   AnyActorRef,
+  AnyActorScope,
   AnyEventObject,
-  AnyState,
-  Spawner,
-  TODO
+  AnyMachineSnapshot,
+  ConditionalRequired,
+  InputFrom,
+  IsNotNever,
+  RegistryKeyForLogic,
+  SystemRegistry,
+  TODO,
+  type RequiredLogicInput
 } from './types.ts';
 import { resolveReferencedActor } from './utils.ts';
 
+export type Spawner<TSystemRegistry extends SystemRegistry = SystemRegistry> = <
+  TLogic extends AnyActorLogic
+>(
+  src: TLogic,
+  ...[options]: ConditionalRequired<
+    [
+      options?: {
+        id?: string;
+        registryKey?: RegistryKeyForLogic<TLogic, TSystemRegistry>;
+        input?: TLogic extends string ? unknown : InputFrom<TLogic>;
+        syncSnapshot?: boolean;
+      } & { [K in RequiredLogicInput<TLogic>]: unknown }
+    ],
+    IsNotNever<RequiredLogicInput<TLogic>>
+  >
+) => ActorFromLogic<TLogic>;
+
 export function createSpawner(
-  actorContext: AnyActorContext,
-  { machine, context }: AnyState,
+  actorScope: AnyActorScope,
+  { machine, context }: AnyMachineSnapshot,
   event: AnyEventObject,
   spawnedChildren: Record<string, AnyActorRef>
 ): Spawner {
-  const spawn: Spawner = (src, options = {}) => {
-    const { systemId } = options;
+  const spawn: Spawner = ((src, options) => {
     if (typeof src === 'string') {
-      const referenced = resolveReferencedActor(
-        machine.implementations.actors[src]
-      );
+      const logic = resolveReferencedActor(machine, src);
 
-      if (!referenced) {
+      if (!logic) {
         throw new Error(
-          `Actor logic '${src}' not implemented in machine '${machine.id}'`
+          `Actor logic '${src as string}' not implemented in machine '${machine.id}'`
         );
       }
 
-      const input = 'input' in options ? options.input : referenced.input;
-
-      // TODO: this should also receive `src`
-      const actor = createActor(referenced.src, {
-        id: options.id,
-        parent: actorContext.self,
+      const actor = createActor(logic, {
+        id: options?.id,
+        parent: actorScope.self,
+        syncSnapshot: options?.syncSnapshot,
         input:
-          typeof input === 'function'
-            ? input({
+          typeof options?.input === 'function'
+            ? options.input({
                 context,
                 event,
-                self: actorContext.self
+                self: actorScope.self
               })
-            : input,
-        systemId
+            : options?.input,
+        src,
+        registryKey: options?.registryKey
       }) as any;
+
       spawnedChildren[actor.id] = actor;
+
       return actor;
     } else {
-      // TODO: this should also receive `src`
-      return createActor(src, {
-        id: options.id,
-        parent: actorContext.self,
-        input: options.input,
-        systemId
+      const actor = createActor(src, {
+        id: options?.id,
+        parent: actorScope.self,
+        syncSnapshot: options?.syncSnapshot,
+        input: options?.input,
+        src,
+        registryKey: options?.registryKey
       });
+
+      return actor;
     }
-  };
-  return (src, options) => {
-    const actorRef = spawn(src, options) as TODO; // TODO: fix types
-    spawnedChildren[actorRef.id] = actorRef;
-    actorContext.defer(() => {
-      if (actorRef.status === ActorStatus.Stopped) {
+  }) as Spawner;
+  return ((src, options) => {
+    const actor = spawn(src, options) as TODO; // TODO: fix types
+    spawnedChildren[actor.id] = actor;
+    actorScope.defer(() => {
+      if (actor._processingStatus === ProcessingStatus.Stopped) {
         return;
       }
-      try {
-        actorRef.start?.();
-      } catch (err) {
-        actorContext.self.send(error(actorRef.id, err));
-        return;
-      }
+      actor.start();
     });
-    return actorRef;
-  };
+    return actor;
+  }) as Spawner;
 }

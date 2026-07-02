@@ -1,32 +1,28 @@
 import isDevelopment from '#is-development';
-import { AnyActorLogic, AnyState } from './index.ts';
-import { errorExecution, errorPlatform } from './constantPrefixes.ts';
-import { STATE_DELIMITER, TARGETLESS_KEY } from './constants.ts';
+import { isMachineSnapshot } from './State.ts';
 import type { StateNode } from './StateNode.ts';
+import { TARGETLESS_KEY, WILDCARD } from './constants.ts';
+import { isStateId } from './stateUtils.ts';
 import type {
-  ActorLogic,
+  AnyActor,
   AnyEventObject,
+  AnyMachineSnapshot,
+  AnyStateMachine,
+  AnyTransitionConfig,
+  AnyTransitionConfigFunction,
+  ErrorEvent,
   EventObject,
   InvokeConfig,
   MachineContext,
   Mapper,
+  NonReducibleUnknown,
   Observer,
-  ErrorEvent,
+  OutputArg,
   SingleOrArray,
   StateLike,
   StateValue,
-  Subscribable,
-  TransitionConfig,
-  TransitionConfigTarget,
-  TODO,
-  AnyActorRef,
-  AnyTransitionConfig,
-  AnyInvokeConfig
+  TransitionConfigTarget
 } from './types.ts';
-
-export function keys<T extends object>(value: T): Array<keyof T & string> {
-  return Object.keys(value) as Array<keyof T & string>;
-}
 
 export function matchesState(
   parentStateId: StateValue,
@@ -53,47 +49,64 @@ export function matchesState(
       return false;
     }
 
-    return matchesState(parentStateValue[key], childStateValue[key]);
+    return matchesState(parentStateValue[key]!, childStateValue[key]!);
   });
 }
 
+export function checkStateIn(
+  snapshot: AnyMachineSnapshot,
+  stateValue: StateValue
+) {
+  if (typeof stateValue === 'string' && isStateId(stateValue)) {
+    const target = snapshot.machine.getStateNodeById(stateValue);
+    return snapshot._nodes.some((sn) => sn === target);
+  }
+
+  return snapshot.matches(stateValue);
+}
+
 export function toStatePath(stateId: string | string[]): string[] {
-  try {
-    if (isArray(stateId)) {
-      return stateId;
+  if (isArray(stateId)) {
+    return stateId;
+  }
+
+  const result: string[] = [];
+  let segment = '';
+
+  for (let i = 0; i < stateId.length; i++) {
+    const char = stateId.charCodeAt(i);
+    switch (char) {
+      // \
+      case 92:
+        // consume the next character
+        segment += stateId[i + 1];
+        // and skip over it
+        i++;
+        continue;
+      // .
+      case 46:
+        result.push(segment);
+        segment = '';
+        continue;
     }
-
-    return stateId.toString().split(STATE_DELIMITER);
-  } catch (e) {
-    throw new Error(`'${stateId}' is not a valid state path.`);
+    segment += stateId[i];
   }
+
+  result.push(segment);
+
+  return result;
 }
 
-export function isStateLike(state: any): state is AnyState {
-  return (
-    typeof state === 'object' &&
-    'value' in state &&
-    'context' in state &&
-    'event' in state
-  );
-}
-
-export function toStateValue(
-  stateValue: StateLike<any> | StateValue | string[]
-): StateValue {
-  if (isStateLike(stateValue)) {
+function toStateValue(stateValue: StateLike<any> | StateValue): StateValue {
+  if (isMachineSnapshot(stateValue)) {
     return stateValue.value;
-  }
-
-  if (isArray(stateValue)) {
-    return pathToStateValue(stateValue);
   }
 
   if (typeof stateValue !== 'string') {
     return stateValue as StateValue;
   }
 
-  const statePath = toStatePath(stateValue as string);
+  const statePath = toStatePath(stateValue);
 
   return pathToStateValue(statePath);
 }
@@ -143,76 +156,7 @@ export function mapValues(
   return result;
 }
 
-export function mapFilterValues<T, P>(
-  collection: { [key: string]: T },
-  iteratee: (item: T, key: string, collection: { [key: string]: T }) => P,
-  predicate: (item: T) => boolean
-): { [key: string]: P } {
-  const result: { [key: string]: P } = {};
-
-  for (const key of Object.keys(collection)) {
-    const item = collection[key];
-
-    if (!predicate(item)) {
-      continue;
-    }
-
-    result[key] = iteratee(item, key, collection);
-  }
-
-  return result;
-}
-
-/**
- * Retrieves a value at the given path.
- * @param props The deep path to the prop of the desired value
- */
-export function path<T extends Record<string, any>>(props: string[]): any {
-  return (object: T): any => {
-    let result: T = object;
-
-    for (const prop of props) {
-      result = result[prop as keyof typeof result];
-    }
-
-    return result;
-  };
-}
-
-export function toStatePaths(stateValue: StateValue | undefined): string[][] {
-  if (!stateValue) {
-    return [[]];
-  }
-
-  if (typeof stateValue === 'string') {
-    return [[stateValue]];
-  }
-
-  const result = flatten(
-    Object.keys(stateValue).map((key) => {
-      const subStateValue = stateValue[key];
-
-      if (
-        typeof subStateValue !== 'string' &&
-        (!subStateValue || !Object.keys(subStateValue).length)
-      ) {
-        return [[key]];
-      }
-
-      return toStatePaths(stateValue[key]).map((subPath) => {
-        return [key].concat(subPath);
-      });
-    })
-  );
-
-  return result;
-}
-
-export function flatten<T>(array: Array<T | T[]>): T[] {
-  return ([] as T[]).concat(...array);
-}
-
-export function toArrayStrict<T>(value: readonly T[] | T): readonly T[] {
+function toArrayStrict<T>(value: readonly T[] | T): readonly T[] {
   if (isArray(value)) {
     return value;
   }
@@ -226,21 +170,37 @@ export function toArray<T>(value: readonly T[] | T | undefined): readonly T[] {
   return toArrayStrict(value);
 }
 
-export function mapContext<
+export function resolveOutput<
   TContext extends MachineContext,
-  TEvent extends EventObject
+  TExpressionEvent extends EventObject
 >(
-  mapper: Mapper<TContext, TEvent, any>,
+  mapper:
+    | Mapper<TContext, TExpressionEvent, unknown, EventObject>
+    | NonReducibleUnknown,
   context: TContext,
-  event: TEvent,
-  self: AnyActorRef
-): any {
+  event: TExpressionEvent,
+  self: AnyActor
+): unknown {
   if (typeof mapper === 'function') {
-    return mapper({ context, event, self });
+    const outputMapper = mapper as Mapper<
+      TContext,
+      TExpressionEvent,
+      unknown,
+      EventObject
+    >;
+    const args = {
+      context,
+      event,
+      output: getEventOutput(event),
+      self
+    } as unknown as Parameters<typeof outputMapper>[0];
+
+    return outputMapper(args);
   }
 
   if (
     isDevelopment &&
+    !!mapper &&
     typeof mapper === 'object' &&
     Object.values(mapper).some((val) => typeof val === 'function')
   ) {
@@ -248,7 +208,7 @@ export function mapContext<
       `Dynamically mapping values to individual properties is deprecated. Use a single function that returns the mapped object instead.\nFound object containing properties whose values are possibly mapping functions: ${Object.entries(
         mapper
       )
-        .filter(([key, value]) => typeof value === 'function')
+        .filter(([, value]) => typeof value === 'function')
         .map(
           ([key, value]) =>
             `\n - ${key}: ${(value as () => any)
@@ -262,82 +222,36 @@ export function mapContext<
   return mapper;
 }
 
-export function isBuiltInEvent(eventType: string): boolean {
-  return /^(done|error)\./.test(eventType);
+export function getEventOutput<TEvent extends EventObject>(
+  event: TEvent
+): OutputArg<TEvent>['output'] {
+  if (isDoneEvent(event)) {
+    const doneEvent = event as unknown as EventObject & { output: unknown };
+    return doneEvent.output as OutputArg<TEvent>['output'];
+  }
+
+  return undefined as OutputArg<TEvent>['output'];
 }
 
-export function isPromiseLike(value: any): value is PromiseLike<any> {
-  if (value instanceof Promise) {
-    return true;
-  }
-  // Check if shape matches the Promise/A+ specification for a "thenable".
-  if (
-    value !== null &&
-    (typeof value === 'function' || typeof value === 'object') &&
-    typeof value.then === 'function'
-  ) {
-    return true;
-  }
-  return false;
-}
-
-export function isActorLogic(value: any): value is ActorLogic<any, any> {
+function isDoneEvent(event: EventObject): boolean {
   return (
-    value !== null &&
-    typeof value === 'object' &&
-    'transition' in value &&
-    typeof value.transition === 'function'
+    event.type.startsWith('xstate.done.actor.') ||
+    event.type.startsWith('xstate.done.state.')
   );
 }
 
-export function partition<T, A extends T, B extends T>(
-  items: T[],
-  predicate: (item: T) => item is A
-): [A[], B[]] {
-  const [truthy, falsy] = [[], []] as [A[], B[]];
-
-  for (const item of items) {
-    if (predicate(item)) {
-      truthy.push(item);
-    } else {
-      falsy.push(item as B);
-    }
-  }
-
-  return [truthy, falsy];
-}
-
-export function isArray(value: any): value is readonly any[] {
+function isArray(value: any): value is readonly any[] {
   return Array.isArray(value);
 }
 
-export function isObservable<T>(value: any): value is Subscribable<T> {
-  return (
-    !!value && 'subscribe' in value && typeof value.subscribe === 'function'
-  );
+export function isErrorEvent(event: AnyEventObject): event is ErrorEvent {
+  return event.type.startsWith('xstate.error.');
 }
 
-export const uniqueId = (() => {
-  let currentId = 0;
-
-  return () => {
-    currentId++;
-    return currentId.toString(16);
-  };
-})();
-
-export function isErrorEvent(event: AnyEventObject): event is ErrorEvent<any> {
-  return (
-    typeof event.type === 'string' &&
-    (event.type === errorExecution || event.type.startsWith(errorPlatform))
-  );
-}
-
-export function toTransitionConfigArray<
-  TContext extends MachineContext,
-  TEvent extends EventObject
->(
-  configLike: SingleOrArray<AnyTransitionConfig | TransitionConfigTarget>
+export function toTransitionConfigArray(
+  configLike: SingleOrArray<
+    AnyTransitionConfig | TransitionConfigTarget | AnyTransitionConfigFunction
+  >
 ): Array<AnyTransitionConfig> {
   return toArrayStrict(configLike).map((transitionLike) => {
     if (
@@ -345,6 +259,10 @@ export function toTransitionConfigArray<
       typeof transitionLike === 'string'
     ) {
       return { target: transitionLike };
+    }
+
+    if (typeof transitionLike === 'function') {
+      return { to: transitionLike };
     }
 
     return transitionLike;
@@ -361,59 +279,6 @@ export function normalizeTarget<
     return undefined;
   }
   return toArray(target);
-}
-
-export function reportUnhandledExceptionOnInvocation(
-  originalError: any,
-  currentError: any,
-  id: string
-) {
-  if (isDevelopment) {
-    const originalStackTrace = originalError.stack
-      ? ` Stacktrace was '${originalError.stack}'`
-      : '';
-    if (originalError === currentError) {
-      // tslint:disable-next-line:no-console
-      console.error(
-        `Missing onError handler for invocation '${id}', error was '${originalError}'.${originalStackTrace}`
-      );
-    } else {
-      const stackTrace = currentError.stack
-        ? ` Stacktrace was '${currentError.stack}'`
-        : '';
-      // tslint:disable-next-line:no-console
-      console.error(
-        `Missing onError handler and/or unhandled exception/promise rejection for invocation '${id}'. ` +
-          `Original error: '${originalError}'. ${originalStackTrace} Current error is '${currentError}'.${stackTrace}`
-      );
-    }
-  }
-}
-
-export function toInvokeConfig<
-  TContext extends MachineContext,
-  TEvent extends EventObject
->(
-  invocable: AnyInvokeConfig | string | AnyActorLogic,
-  id: string
-): AnyInvokeConfig {
-  if (typeof invocable === 'object') {
-    if ('src' in invocable) {
-      return invocable;
-    }
-
-    if ('transition' in invocable) {
-      return {
-        id,
-        src: invocable
-      };
-    }
-  }
-
-  return {
-    id,
-    src: invocable
-  };
 }
 
 export function toObserver<T>(
@@ -434,18 +299,102 @@ export function toObserver<T>(
 }
 
 export function createInvokeId(stateNodeId: string, index: number): string {
-  return `${stateNodeId}:invocation[${index}]`;
+  return `${index}.${stateNodeId}`;
 }
 
-export function resolveReferencedActor(
-  referenced:
-    | AnyActorLogic
-    | { src: AnyActorLogic; input: Mapper<any, any, any> | any }
-    | undefined
-) {
-  return referenced
-    ? 'transition' in referenced
-      ? { src: referenced, input: undefined }
-      : referenced
-    : undefined;
+export function resolveReferencedActor(machine: AnyStateMachine, src: string) {
+  const match = src.match(/^xstate\.invoke\.(\d+)\.(.*)/)!;
+  if (!match) {
+    return machine.implementations.actorSources[src];
+  }
+  const [, indexStr, nodeId] = match;
+  const node = machine.getStateNodeById(nodeId);
+  const invokeConfig = node.config.invoke!;
+  const configSrc = (
+    Array.isArray(invokeConfig)
+      ? invokeConfig[indexStr as any]
+      : (invokeConfig as InvokeConfig<
+          any,
+          any,
+          any,
+          any,
+          any,
+          any,
+          any, // TEmitted
+          any // TMeta
+        >)
+  ).src;
+  // A referenced actor may itself be registered by name.
+  return typeof configSrc === 'string'
+    ? machine.implementations.actorSources[configSrc]
+    : configSrc;
+}
+
+export function getAllOwnEventDescriptors(snapshot: AnyMachineSnapshot) {
+  return [...new Set([...snapshot._nodes.flatMap((sn) => sn.ownEvents)])];
+}
+
+/**
+ * Checks if an event type matches an event descriptor, supporting wildcards.
+ * Event descriptors can be:
+ *
+ * - Exact matches: "event.type"
+ * - Wildcard: "*"
+ * - Partial matches: "event.*"
+ *
+ * @param eventType - The actual event type string
+ * @param descriptor - The event descriptor to match against
+ * @returns True if the event type matches the descriptor
+ */
+export function matchesEventDescriptor(
+  eventType: string,
+  descriptor: string
+): boolean {
+  if (descriptor === eventType) {
+    return true;
+  }
+
+  if (descriptor === WILDCARD) {
+    return true;
+  }
+
+  if (!descriptor.endsWith('.*')) {
+    return false;
+  }
+
+  if (isDevelopment && /.*\*.+/.test(descriptor)) {
+    console.warn(
+      `Wildcards can only be the last token of an event descriptor (e.g., "event.*") or the entire event descriptor ("*"). Check the "${descriptor}" event.`
+    );
+  }
+
+  const partialEventTokens = descriptor.split('.');
+  const eventTokens = eventType.split('.');
+
+  for (
+    let tokenIndex = 0;
+    tokenIndex < partialEventTokens.length;
+    tokenIndex++
+  ) {
+    const partialEventToken = partialEventTokens[tokenIndex];
+    const eventToken = eventTokens[tokenIndex];
+
+    if (partialEventToken === '*') {
+      const isLastToken = tokenIndex === partialEventTokens.length - 1;
+
+      if (isDevelopment && !isLastToken) {
+        console.warn(
+          `Infix wildcards in transition events are not allowed. Check the "${descriptor}" transition.`
+        );
+      }
+
+      return isLastToken;
+    }
+
+    if (partialEventToken !== eventToken) {
+      return false;
+    }
+  }
+
+  return true;
 }

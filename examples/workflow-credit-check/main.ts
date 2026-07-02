@@ -1,101 +1,50 @@
-import { assign, createMachine, fromPromise, interpret } from 'xstate';
-
+import { createMachine, createAsyncLogic, createActor } from 'xstate';
+import { z } from 'zod';
+interface Customer {
+  id: string;
+  name: string;
+  SSN: number;
+  yearlyIncome: number;
+  address: string;
+  employer: string;
+}
 // https://github.com/serverlessworkflow/specification/tree/main/examples#perform-customer-credit-check-example
-export const workflow = createMachine(
-  {
-    id: 'customercreditcheck',
-    initial: 'CheckCredit',
-    types: {} as {
-      context: {
-        customer: {
-          id: string;
-          name: string;
-          SSN: number;
-          yearlyIncome: number;
-          address: string;
-          employer: string;
-        };
-        creditCheck: {
-          decision: 'Approved' | 'Denied';
-        } | null;
-      };
+export const workflow = createMachine({
+  types: {
+    context: {} as {
+      customer: Customer;
+      creditCheck: {
+        decision: 'Approved' | 'Denied';
+      } | null;
     },
-    context: ({ input }) => ({
-      customer: input.customer,
-      creditCheck: null
-    }),
-    states: {
-      CheckCredit: {
-        invoke: {
-          src: 'callCreditCheckMicroservice',
-          input: ({ context }) => ({
-            customer: context.customer
-          }),
-          onDone: {
-            target: 'EvaluateDecision',
-            actions: assign({
-              creditCheck: ({ event }) => event.output
-            })
-          }
-        },
-        // timeout
-        after: {
-          PT15M: 'Timeout'
-        }
-      },
-      EvaluateDecision: {
-        always: [
-          {
-            guard: ({ context }) =>
-              context.creditCheck?.decision === 'Approved',
-            target: 'StartApplication'
-          },
-          {
-            guard: ({ context }) => context.creditCheck?.decision === 'Denied',
-            target: 'RejectApplication'
-          },
-          {
-            target: 'RejectApplication'
-          }
-        ]
-      },
-      StartApplication: {
-        invoke: {
-          src: 'startApplicationWorkflowId',
-          onDone: {
-            target: 'End'
-          }
-        }
-      },
-      RejectApplication: {
-        invoke: {
-          src: 'sendRejectionEmailFunction',
-          input: ({ context }) => ({
-            applicant: context.customer
-          }),
-          onDone: {
-            target: 'End'
-          }
-        }
-      },
-      End: {
-        type: 'final'
-      },
-      Timeout: {}
+    input: {} as {
+      customer: Customer;
     }
   },
-  {
-    actors: {
-      callCreditCheckMicroservice: fromPromise(async ({ input }) => {
+  actorSources: {
+    callCreditCheckMicroservice: createAsyncLogic({
+      schemas: {
+        input: z.custom<{
+          customer: Customer;
+        }>()
+      },
+      run: async ({ input }) => {
         console.log('calling credit check microservice', input);
         return {
           id: 'customer123',
           score: 700,
-          decision: 'Approved',
+          decision: 'Approved' as const,
           reason: 'Good credit score'
         };
-      }),
-      startApplicationWorkflowId: fromPromise(async ({ input }) => {
+      }
+    }),
+    startApplicationWorkflowId: createAsyncLogic({
+      schemas: {
+        input: z.custom<{
+          customer: Customer;
+        }>()
+      },
+      run: async ({ input }) => {
         console.log('starting application workflow', input);
         // fake 1s
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -105,8 +54,15 @@ export const workflow = createMachine(
             status: 'Approved'
           }
         };
-      }),
-      sendRejectionEmailFunction: fromPromise(async ({ input }) => {
+      }
+    }),
+    sendRejectionEmailFunction: createAsyncLogic({
+      schemas: {
+        input: z.custom<{
+          applicant: Customer;
+        }>()
+      },
+      run: async ({ input }) => {
         console.log('sending rejection email', input);
         // fake 1s
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -116,15 +72,101 @@ export const workflow = createMachine(
             status: 'Sent'
           }
         };
-      })
+      }
+    })
+  },
+  delays: {
+    PT15M: 15 * 60 * 1000
+  },
+  id: 'customercreditcheck',
+  initial: 'CheckCredit',
+  context: ({ input }) => ({
+    customer: input.customer,
+    creditCheck: null
+  }),
+  states: {
+    CheckCredit: {
+      invoke: {
+        src: 'callCreditCheckMicroservice',
+        input: ({ context }) => ({
+          customer: context.customer
+        }),
+        onDone: ({ context, event, guards, actions }, enq) => {
+          return {
+            target: 'EvaluateDecision',
+            context: {
+              ...context,
+              creditCheck: (({ event }) => event.output)({
+                context: context,
+                event: event
+              })
+            }
+          };
+        }
+      },
+      // timeout
+      after: {
+        PT15M: 'Timeout'
+      }
     },
-    delays: {
-      PT15M: 15 * 60 * 1000
-    }
+    EvaluateDecision: {
+      always: [
+        ({ context, event, guards, actions }, enq) => {
+          if (
+            !(({ context }) => context.creditCheck?.decision === 'Approved')({
+              context,
+              event
+            })
+          ) {
+            return;
+          }
+          return { target: 'StartApplication' };
+        },
+        ({ context, event, guards, actions }, enq) => {
+          if (
+            !(({ context }) => context.creditCheck?.decision === 'Denied')({
+              context,
+              event
+            })
+          ) {
+            return;
+          }
+          return { target: 'RejectApplication' };
+        },
+        {
+          target: 'RejectApplication'
+        }
+      ]
+    },
+    StartApplication: {
+      invoke: {
+        src: 'startApplicationWorkflowId',
+        input: ({ context }) => ({
+          customer: context.customer
+        }),
+        onDone: {
+          target: 'End'
+        }
+      }
+    },
+    RejectApplication: {
+      invoke: {
+        src: 'sendRejectionEmailFunction',
+        input: ({ context }) => ({
+          applicant: context.customer
+        }),
+        onDone: {
+          target: 'End'
+        }
+      }
+    },
+    End: {
+      type: 'final'
+    },
+    Timeout: {}
   }
-);
-
-const actor = interpret(workflow, {
+});
+const actor = createActor(workflow, {
   input: {
     customer: {
       id: 'customer123',
@@ -134,16 +176,16 @@ const actor = interpret(workflow, {
       address: '123 MyLane, MyCity, MyCountry',
       employer: 'MyCompany'
     }
+  },
+  inspect: (inspEv) => {
+    if (inspEv.type === '@xstate.event') {
+      console.log('Received event', inspEv.event);
+    }
   }
 });
-
 actor.subscribe({
-  next(state) {
-    console.log('Received event', state.event, state.value);
-  },
   complete() {
     console.log('workflow completed', actor.getSnapshot().output);
   }
 });
-
 actor.start();
