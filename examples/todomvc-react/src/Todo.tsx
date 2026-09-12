@@ -1,19 +1,17 @@
 import React, { useRef } from 'react';
 import { useActorRef, useSelector } from '@xstate/react';
 import cn from 'classnames';
-import { assign, createMachine } from 'xstate';
+import { createMachine } from 'xstate';
 import { TodosContext } from './App';
 import { TodoItem } from './todosMachine';
 
 export const todoMachine = createMachine({
-  id: 'todo',
-  initial: 'reading',
-  types: {} as {
-    context: {
+  types: {
+    context: {} as {
       initialTitle: string;
       title: string;
-    };
-    events:
+    },
+    events: {} as
       | {
           type: 'edit';
         }
@@ -26,8 +24,17 @@ export const todoMachine = createMachine({
       | {
           type: 'change';
           value: string;
-        };
+        },
+    input: {} as {
+      todo: TodoItem;
+    }
   },
+  actions: {
+    focusInput: () => {},
+    onCommit: () => {}
+  },
+  id: 'todo',
+  initial: 'reading',
   context: ({ input }) => ({
     initialTitle: input.todo.title,
     title: input.todo.title
@@ -39,22 +46,45 @@ export const todoMachine = createMachine({
       }
     },
     editing: {
-      entry: 'focusInput',
+      entry: (args, enq) => {
+        enq((actionArgs) => args.actions['focusInput'](actionArgs as any));
+        return {
+          context: {
+            ...args.context,
+            initialTitle: (({ context }) => context.title)({
+              context: args.context,
+              event: args.event
+            })
+          }
+        };
+      },
       on: {
-        blur: {
-          target: 'reading',
-          actions: 'onCommit'
+        blur: ({ context, event, guards, actions }, enq) => {
+          enq((actionArgs) => actions['onCommit'](actionArgs as any));
+          return { target: 'reading' };
         },
-        cancel: {
-          target: 'reading',
-          actions: assign({
-            title: ({ context }) => context.initialTitle
-          })
+        cancel: ({ context, event, guards, actions }, enq) => {
+          return {
+            target: 'reading',
+            context: {
+              ...context,
+              title: (({ context }) => context.initialTitle)({
+                context: context,
+                event: event
+              })
+            }
+          };
         },
-        change: {
-          actions: assign({
-            title: ({ event }) => event.value
-          })
+        change: ({ context, event, guards, actions }, enq) => {
+          return {
+            context: {
+              ...context,
+              title: (({ event }) => event.value)({
+                context: context,
+                event: event
+              })
+            }
+          };
         }
       }
     }

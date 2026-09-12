@@ -1,25 +1,48 @@
 import { useCallback } from 'react';
 import { useSyncExternalStoreWithSelector } from 'use-sync-external-store/shim/with-selector';
-import { ActorRef, SnapshotFrom } from 'xstate';
+import { AnyActorRef } from 'xstate';
+
+type SyncExternalStoreSubscribe = Parameters<
+  typeof useSyncExternalStoreWithSelector
+>[0];
 
 function defaultCompare<T>(a: T, b: T) {
   return a === b;
 }
 
-export function useSelector<TActor extends ActorRef<any, any>, T>(
+export function useSelector<
+  TActor extends Pick<AnyActorRef, 'subscribe' | 'getSnapshot'> | undefined,
+  T
+>(
   actor: TActor,
-  selector: (emitted: SnapshotFrom<TActor>) => T,
+  selector: (
+    snapshot: TActor extends { getSnapshot(): infer TSnapshot }
+      ? TSnapshot
+      : undefined
+  ) => T,
   compare: (a: T, b: T) => boolean = defaultCompare
 ): T {
-  const subscribe = useCallback(
+  const subscribe: SyncExternalStoreSubscribe = useCallback(
     (handleStoreChange) => {
-      const { unsubscribe } = actor.subscribe(handleStoreChange);
+      if (!actor) {
+        return () => {};
+      }
+      const { unsubscribe } = actor.subscribe({
+        next: handleStoreChange,
+        error: handleStoreChange
+      });
       return unsubscribe;
     },
     [actor]
   );
 
-  const boundGetSnapshot = useCallback(() => actor.getSnapshot(), [actor]);
+  const boundGetSnapshot = useCallback(() => {
+    const snapshot = actor?.getSnapshot();
+    if (snapshot && 'status' in snapshot && snapshot.status === 'error') {
+      throw snapshot.error;
+    }
+    return snapshot;
+  }, [actor]);
 
   const selectedSnapshot = useSyncExternalStoreWithSelector(
     subscribe,

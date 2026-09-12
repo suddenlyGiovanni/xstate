@@ -1,4 +1,4 @@
-import { assign, createMachine } from 'xstate';
+import { createMachine } from 'xstate';
 
 export interface TodoItem {
   id: string;
@@ -9,7 +9,6 @@ export interface TodoItem {
 export type TodosFilter = 'all' | 'active' | 'completed';
 
 export const todosMachine = createMachine({
-  id: 'todos',
   types: {} as {
     context: {
       todo: string;
@@ -26,6 +25,7 @@ export const todosMachine = createMachine({
       | { type: 'todo.markAll'; mark: 'active' | 'completed' }
       | { type: 'todos.clearCompleted' };
   },
+  id: 'todos',
   context: {
     todo: '',
     todos: [
@@ -38,97 +38,128 @@ export const todosMachine = createMachine({
     filter: 'all'
   },
   on: {
-    'newTodo.change': {
-      actions: assign({
-        todo: ({ event }) => event.value
-      })
-    },
-    'newTodo.commit': {
-      guard: ({ event }) => event.value.trim().length > 0,
-      actions: assign({
-        todo: '',
-        todos: ({ context, event }) => {
-          const newTodo: TodoItem = {
-            id: Math.random().toString(36).substring(7),
-            title: event.value,
-            completed: false
-          };
-
-          return [...context.todos, newTodo];
+    'newTodo.change': ({ context, event, guards, actions }, enq) => {
+      return {
+        context: {
+          ...context,
+          todo: (({ event }) => event.value)({ context: context, event: event })
         }
-      })
+      };
     },
-    'todo.commit': {
-      actions: assign({
-        todos: ({ context, event }) => {
-          const { todo: todoToUpdate } = event;
+    'newTodo.commit': ({ context, event, guards, actions }, enq) => {
+      if (!(({ event }) => event.value.trim().length > 0)({ context, event })) {
+        return;
+      }
+      return {
+        context: {
+          ...context,
+          todo: '',
+          todos: (({ context, event }) => {
+            const newTodo: TodoItem = {
+              id: Math.random().toString(36).substring(7),
+              title: event.value,
+              completed: false
+            };
 
-          if (!todoToUpdate.title.trim().length) {
-            return context.todos.filter((todo) => todo.id !== todoToUpdate.id);
-          }
+            return [...context.todos, newTodo];
+          })({ context: context, event: event })
+        }
+      };
+    },
+    'todo.commit': ({ context, event, guards, actions }, enq) => {
+      return {
+        context: {
+          ...context,
+          todos: (({ context, event }) => {
+            const { todo: todoToUpdate } = event;
 
-          return context.todos.map((todo) => {
-            if (todo.id === todoToUpdate.id) {
-              return todoToUpdate;
+            if (!todoToUpdate.title.trim().length) {
+              return context.todos.filter(
+                (todo) => todo.id !== todoToUpdate.id
+              );
             }
 
-            return todo;
-          });
-        }
-      })
-    },
-    'todo.delete': {
-      actions: assign({
-        todos: ({ context, event }) => {
-          const { id } = event;
+            return context.todos.map((todo) => {
+              if (todo.id === todoToUpdate.id) {
+                return todoToUpdate;
+              }
 
-          return context.todos.filter((todo) => todo.id !== id);
+              return todo;
+            });
+          })({ context: context, event: event })
         }
-      })
+      };
     },
-    'filter.change': {
-      actions: assign({
-        filter: ({ event }) => event.filter
-      })
-    },
-    'todo.mark': {
-      actions: assign({
-        todos: ({ context, event }) => {
-          const { mark } = event;
+    'todo.delete': ({ context, event, guards, actions }, enq) => {
+      return {
+        context: {
+          ...context,
+          todos: (({ context, event }) => {
+            const { id } = event;
 
-          return context.todos.map((todo) => {
-            if (todo.id === event.id) {
+            return context.todos.filter((todo) => todo.id !== id);
+          })({ context: context, event: event })
+        }
+      };
+    },
+    'filter.change': ({ context, event, guards, actions }, enq) => {
+      return {
+        context: {
+          ...context,
+          filter: (({ event }) => event.filter)({
+            context: context,
+            event: event
+          })
+        }
+      };
+    },
+    'todo.mark': ({ context, event, guards, actions }, enq) => {
+      return {
+        context: {
+          ...context,
+          todos: (({ context, event }) => {
+            const { mark } = event;
+
+            return context.todos.map((todo) => {
+              if (todo.id === event.id) {
+                return {
+                  ...todo,
+                  completed: mark === 'completed'
+                };
+              }
+
+              return todo;
+            });
+          })({ context: context, event: event })
+        }
+      };
+    },
+    'todo.markAll': ({ context, event, guards, actions }, enq) => {
+      return {
+        context: {
+          ...context,
+          todos: (({ context, event }) => {
+            const { mark } = event;
+
+            return context.todos.map((todo) => {
               return {
                 ...todo,
                 completed: mark === 'completed'
               };
-            }
-
-            return todo;
-          });
+            });
+          })({ context: context, event: event })
         }
-      })
+      };
     },
-    'todo.markAll': {
-      actions: assign({
-        todos: ({ context, event }) => {
-          const { mark } = event;
-
-          return context.todos.map((todo) => {
-            return {
-              ...todo,
-              completed: mark === 'completed'
-            };
-          });
+    'todos.clearCompleted': ({ context, event, guards, actions }, enq) => {
+      return {
+        context: {
+          ...context,
+          todos: (({ context }) => {
+            return context.todos.filter((todo) => !todo.completed);
+          })({ context: context, event: event })
         }
-      })
-    },
-    'todos.clearCompleted': {
-      actions: assign({
-        todos: ({ context }) => {
-          return context.todos.filter((todo) => !todo.completed);
-        }
-      })
+      };
     }
   }
 });

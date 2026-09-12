@@ -1,5 +1,8 @@
-import { createActor, waitFor } from '../src/index.ts';
-import { createMachine } from '../src/index.ts';
+import {
+  createActor,
+  waitFor,
+  createMachine as createMachine
+} from '../src/index.ts';
 
 describe('waitFor', () => {
   it('should wait for a condition to be true and return the emitted value', async () => {
@@ -7,7 +10,7 @@ describe('waitFor', () => {
       initial: 'a',
       states: {
         a: {
-          on: { NEXT: 'b' }
+          on: { NEXT: { target: 'b' } }
         },
         b: {}
       }
@@ -27,10 +30,10 @@ describe('waitFor', () => {
       initial: 'a',
       states: {
         a: {
-          on: { NEXT: 'b' }
+          on: { NEXT: { target: 'b' } }
         },
         b: {
-          on: { NEXT: 'c' }
+          on: { NEXT: { target: 'c' } }
         },
         c: {}
       }
@@ -50,10 +53,10 @@ describe('waitFor', () => {
       initial: 'a',
       states: {
         a: {
-          on: { NEXT: 'b' }
+          on: { NEXT: { target: 'b' } }
         },
         b: {
-          on: { NEXT: 'c' }
+          on: { NEXT: { target: 'c' } }
         },
         c: {}
       }
@@ -75,7 +78,7 @@ describe('waitFor', () => {
       initial: 'a',
       states: {
         a: {
-          on: { NEXT: 'b' }
+          on: { NEXT: { target: 'b' } }
         },
         b: {
           type: 'final'
@@ -115,7 +118,7 @@ describe('waitFor', () => {
     const machine = createMachine({});
 
     const actorRef = createActor(machine).start();
-    const spy = jest.fn();
+    const spy = vi.fn();
     actorRef.subscribe = spy;
 
     waitFor(actorRef, () => true).then(() => {});
@@ -130,7 +133,7 @@ describe('waitFor', () => {
       states: {
         a: {
           on: {
-            NEXT: 'b'
+            NEXT: { target: 'b' }
           }
         },
         b: {}
@@ -155,7 +158,7 @@ describe('waitFor', () => {
       states: {
         a: {
           on: {
-            NEXT: 'b'
+            NEXT: { target: 'b' }
           }
         },
         b: {
@@ -178,7 +181,7 @@ describe('waitFor', () => {
       states: {
         a: {
           on: {
-            NEXT: 'b'
+            NEXT: { target: 'b' }
           }
         },
         b: {
@@ -195,5 +198,207 @@ describe('waitFor', () => {
     ).rejects.toMatchInlineSnapshot(
       `[Error: Actor terminated without satisfying predicate]`
     );
+  });
+
+  it('should not subscribe to the actor when it receives an aborted signal', async () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          on: {
+            NEXT: { target: 'b' }
+          }
+        },
+        b: {
+          type: 'final'
+        }
+      }
+    });
+
+    const service = createActor(machine).start();
+    service.send({ type: 'NEXT' });
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    controller.abort(new Error('Aborted!'));
+    const spy = vi.fn();
+    service.subscribe = spy;
+    try {
+      await waitFor(service, (state) => state.matches('b'), { signal });
+      throw new Error('Should not be reached');
+    } catch {
+      expect(spy).not.toHaveBeenCalled();
+    }
+  });
+
+  it('should not listen for the "abort" event when it receives an aborted signal', async () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          on: {
+            NEXT: { target: 'b' }
+          }
+        },
+        b: {
+          type: 'final'
+        }
+      }
+    });
+
+    const service = createActor(machine).start();
+    service.send({ type: 'NEXT' });
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    controller.abort(new Error('Aborted!'));
+
+    const spy = vi.fn();
+    signal.addEventListener = spy;
+
+    try {
+      await waitFor(service, (state) => state.matches('b'), { signal });
+      throw new Error('Should not be reached');
+    } catch {
+      expect(spy).not.toHaveBeenCalled();
+    }
+  });
+
+  it('should not listen for the "abort" event for actor in its final state that matches the predicate', async () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          on: {
+            NEXT: { target: 'b' }
+          }
+        },
+        b: {
+          type: 'final'
+        }
+      }
+    });
+
+    const service = createActor(machine).start();
+    service.send({ type: 'NEXT' });
+
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    const spy = vi.fn();
+    signal.addEventListener = spy;
+
+    await waitFor(service, (state) => state.matches('b'), { signal });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('should immediately reject when it receives an aborted signal', async () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          on: {
+            NEXT: { target: 'b' }
+          }
+        },
+        b: {
+          type: 'final'
+        }
+      }
+    });
+
+    const service = createActor(machine).start();
+    service.send({ type: 'NEXT' });
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    controller.abort(new Error('Aborted!'));
+
+    await expect(
+      waitFor(service, (state) => state.matches('b'), { signal })
+    ).rejects.toMatchInlineSnapshot(`[Error: Aborted!]`);
+  });
+
+  it('should reject when the signal is aborted while waiting', async () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          on: { NEXT: { target: 'b' } }
+        },
+        b: {}
+      }
+    });
+
+    const service = createActor(machine).start();
+    const controller = new AbortController();
+    const { signal } = controller;
+    setTimeout(() => controller.abort(new Error('Aborted!')), 10);
+
+    await expect(
+      waitFor(service, (state) => state.matches('b'), { signal })
+    ).rejects.toMatchInlineSnapshot(`[Error: Aborted!]`);
+  });
+
+  it('should stop listening for the "abort" event upon successful completion', async () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          on: {
+            NEXT: { target: 'b' }
+          }
+        },
+        b: {
+          type: 'final'
+        }
+      }
+    });
+
+    const service = createActor(machine).start();
+    setTimeout(() => {
+      service.send({ type: 'NEXT' });
+    }, 10);
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    const spy = vi.fn();
+    signal.removeEventListener = spy;
+
+    await waitFor(service, (state) => state.matches('b'), { signal });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should stop listening for the "abort" event upon failure', async (ctx) => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          on: { NEXT: { target: 'b' } }
+        },
+        b: {
+          type: 'final'
+        }
+      }
+    });
+
+    const service = createActor(machine).start();
+
+    setTimeout(() => {
+      service.send({ type: 'NEXT' });
+    }, 10);
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    const spy = vi.fn();
+    signal.removeEventListener = spy;
+
+    try {
+      await waitFor(service, (state) => state.matches('never'), { signal });
+      throw new Error('Should not be reached');
+    } catch {
+      expect(spy).toHaveBeenCalledTimes(1);
+    }
   });
 });

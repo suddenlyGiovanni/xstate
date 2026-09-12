@@ -3,17 +3,29 @@ runs:
   using: 'composite'
   steps:
     - name: Build
-      run: yarn build
+      run: pnpm build
+      shell: bash
+
+    - name: Oxlint
+      run: pnpm lint
+      shell: bash
+
+    - name: Oxfmt
+      run: pnpm format:check
       shell: bash
 
     - name: Typecheck
-      run: yarn typecheck
+      run: pnpm typecheck && pnpm typecheck:adapter-consumers
       shell: bash
 
     - name: Test
-      run: yarn test --silent
+      run: pnpm test --silent
       shell: bash
 
     - name: Svelte Check
-      run: yarn --cwd packages/xstate-svelte svelte-check
+      run: pnpm --filter @xstate/svelte svelte-check
+      shell: bash
+
+    - name: Knip
+      run: pnpm knip
       shell: bash

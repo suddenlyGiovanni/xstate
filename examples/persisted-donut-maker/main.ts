@@ -1,84 +1,8 @@
-import { createMachine, interpret } from 'xstate';
+import { __unsafe_getAllOwnEventDescriptors, createActor } from 'xstate';
 import { promises as fs } from 'fs';
+import { donutMachine } from './donutMachine';
 
 const FILENAME = './persisted-state.json';
-
-const donutMachine = createMachine({
-  id: 'donut',
-  initial: 'ingredients',
-  states: {
-    ingredients: {
-      on: {
-        NEXT: 'directions'
-      }
-    },
-    directions: {
-      initial: 'makeDough',
-      onDone: 'fry',
-      states: {
-        makeDough: {
-          on: { NEXT: 'mix' }
-        },
-        mix: {
-          type: 'parallel',
-          states: {
-            mixDry: {
-              initial: 'mixing',
-              states: {
-                mixing: {
-                  on: { MIXED_DRY: 'mixed' }
-                },
-                mixed: {
-                  type: 'final'
-                }
-              }
-            },
-            mixWet: {
-              initial: 'mixing',
-              states: {
-                mixing: {
-                  on: { MIXED_WET: 'mixed' }
-                },
-                mixed: {
-                  type: 'final'
-                }
-              }
-            }
-          },
-          onDone: 'allMixed'
-        },
-        allMixed: {
-          type: 'final'
-        }
-      }
-    },
-    fry: {
-      on: {
-        NEXT: 'flip'
-      }
-    },
-    flip: {
-      on: {
-        NEXT: 'dry'
-      }
-    },
-    dry: {
-      on: {
-        NEXT: 'glaze'
-      }
-    },
-    glaze: {
-      on: {
-        NEXT: 'serve'
-      }
-    },
-    serve: {
-      on: {
-        ANOTHER_DONUT: 'ingredients'
-      }
-    }
-  }
-});
 
 let restoredState;
 try {
@@ -88,19 +12,20 @@ try {
   restoredState = undefined;
 }
 
-const actor = interpret(donutMachine, {
+const actor = createActor(donutMachine, {
   state: restoredState
 });
 
 actor.subscribe({
   next(snapshot) {
+    const nextEvents = __unsafe_getAllOwnEventDescriptors(snapshot);
     console.log(
       'Current state:',
       // the current state, bolded
       `\x1b[1m${JSON.stringify(snapshot.value)}\x1b[0m\n`,
       'Next events:',
       // the next events, each of them bolded
-      snapshot.nextEvents
+      nextEvents
         .filter((event) => !event.startsWith('done.'))
         .map((event) => `\n  \x1b[1m${event}\x1b[0m`)
         .join(''),
@@ -108,7 +33,7 @@ actor.subscribe({
     );
 
     // save persisted state to json file
-    const persistedState = actor.getPersistedState();
+    const persistedState = actor.getPersistedSnapshot();
     fs.writeFile(FILENAME, JSON.stringify(persistedState));
   },
   complete() {

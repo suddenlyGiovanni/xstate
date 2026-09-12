@@ -1,0 +1,65 @@
+{
+  "fsm-logic": {
+    "maxGzipBytes": 400
+  },
+  "fsm-entrypoint-logic": {
+    "maxGzipBytes": 400
+  },
+  "minimal-machine": {
+    "maxGzipBytes": 25328
+  },
+  "minimal-fsm": {
+    "maxGzipBytes": 400
+  },
+  "fsm-setup": {
+    "maxGzipBytes": 1000
+  },
+  "custom-logic-actor": {
+    "maxGzipBytes": 6398
+  },
+  "machine-construction": {
+    "maxGzipBytes": 25309
+  },
+  "pure-machine": {
+    "maxGzipBytes": 25469
+  },
+  "compound": {
+    "maxGzipBytes": 25337
+  },
+  "parallel": {
+    "maxGzipBytes": 25349
+  },
+  "history": {
+    "maxGzipBytes": 25396
+  },
+  "final": {
+    "maxGzipBytes": 25345
+  },
+  "eventless": {
+    "maxGzipBytes": 25339
+  },
+  "actionful": {
+    "maxGzipBytes": 25343
+  },
+  "invoked": {
+    "maxGzipBytes": 26588
+  },
+  "delayed": {
+    "maxGzipBytes": 25318
+  },
+  "persisted": {
+    "maxGzipBytes": 25335
+  },
+  "inspected": {
+    "maxGzipBytes": 25337
+  },
+  "machine-and-actors": {
+    "maxGzipBytes": 26649
+  },
+  "validated-machine": {
+    "maxGzipBytes": 26966
+  },
+  "kitchen-sink": {
+    "maxGzipBytes": 37995
+  }
+}

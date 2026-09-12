@@ -1,4 +1,4 @@
-import { createMachine } from '../src/index.ts';
+import { createMachine, transition } from '../src/index.ts';
 
 describe('invalid or resolved states', () => {
   it('should resolve a String state', () => {
@@ -22,11 +22,9 @@ describe('invalid or resolved states', () => {
       }
     });
     expect(
-      machine.transition(
-        machine.resolveStateValue('A'),
-        { type: 'E' },
-        {} as any // TODO: figure out the simulation API
-      ).value
+      transition(machine, machine.resolveState({ value: 'A' }), {
+        type: 'E'
+      })[0].value
     ).toEqual({
       A: 'A1',
       B: 'B1'
@@ -54,11 +52,9 @@ describe('invalid or resolved states', () => {
       }
     });
     expect(
-      machine.transition(
-        machine.resolveStateValue({ A: {}, B: {} }),
-        { type: 'E' },
-        {} as any // TODO: figure out the simulation API
-      ).value
+      transition(machine, machine.resolveState({ value: { A: {}, B: {} } }), {
+        type: 'E'
+      })[0].value
     ).toEqual({
       A: 'A1',
       B: 'B1'
@@ -85,11 +81,9 @@ describe('invalid or resolved states', () => {
         }
       }
     });
-    machine.transition(
-      machine.resolveStateValue({ A: 'A1', B: 'B1' }),
-      { type: 'E' },
-      {} as any // TODO: figure out the simulation API
-    );
+    transition(machine, machine.resolveState({ value: { A: 'A1', B: 'B1' } }), {
+      type: 'E'
+    });
   });
 
   it('should reject transitioning from bad state configs', () => {
@@ -113,10 +107,10 @@ describe('invalid or resolved states', () => {
       }
     });
     expect(() =>
-      machine.transition(
-        machine.resolveStateValue({ A: 'A3', B: 'B3' }),
-        { type: 'E' },
-        {} as any // TODO: figure out the simulation API
+      transition(
+        machine,
+        machine.resolveState({ value: { A: 'A3', B: 'B3' } }),
+        { type: 'E' }
       )
     ).toThrow();
   });
@@ -142,11 +136,9 @@ describe('invalid or resolved states', () => {
       }
     });
     expect(
-      machine.transition(
-        machine.resolveStateValue({ A: 'A1', B: {} }),
-        { type: 'E' },
-        {} as any // TODO: figure out the simulation API
-      ).value
+      transition(machine, machine.resolveState({ value: { A: 'A1', B: {} } }), {
+        type: 'E'
+      })[0].value
     ).toEqual({
       A: 'A1',
       B: 'B1'
@@ -165,10 +157,10 @@ describe('invalid transition', () => {
           right: {}
         },
         on: {
-          LEFT_CLICK: 'left',
-          RIGHT_CLICK: 'right'
+          LEFT_CLICK: { target: 'left' },
+          RIGHT_CLICK: { target: 'right' }
         }
       });
-    }).toThrowError(/invalid target/i);
+    }).toThrow(/invalid target/i);
   });
 });

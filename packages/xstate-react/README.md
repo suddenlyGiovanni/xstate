@@ -2,7 +2,7 @@
 
 This package contains utilities for using [XState](https://github.com/statelyai/xstate) with [React](https://github.com/facebook/react/).
 
-- [Read the full documentation in the XState docs](https://xstate.js.org/docs/packages/xstate-react/).
+- [Read the full documentation in the XState docs](https://stately.ai/docs/xstate-react).
 - [Read our contribution guidelines](https://github.com/statelyai/xstate/blob/main/CONTRIBUTING.md).
 
 ## Quick start
@@ -13,25 +13,9 @@ This package contains utilities for using [XState](https://github.com/statelyai/
 npm i xstate @xstate/react
 ```
 
-**Via CDN**
-
-```html
-<script src="https://unpkg.com/@xstate/react/dist/xstate-react.umd.min.js"></script>
-```
-
-By using the global variable `XStateReact`
-
-or
-
-```html
-<script src="https://unpkg.com/@xstate/react/dist/xstate-react-fsm.umd.min.js"></script>
-```
-
-By using the global variable `XStateReactFSM`
-
 2. Import the `useMachine` hook:
 
-```js
+```tsx
 import { useMachine } from '@xstate/react';
 import { createMachine } from 'xstate';
 
@@ -40,10 +24,10 @@ const toggleMachine = createMachine({
   initial: 'inactive',
   states: {
     inactive: {
-      on: { TOGGLE: 'active' }
+      on: { TOGGLE: { target: 'active' } }
     },
     active: {
-      on: { TOGGLE: 'inactive' }
+      on: { TOGGLE: { target: 'inactive' } }
     }
   }
 });
@@ -52,7 +36,7 @@ export const Toggler = () => {
   const [state, send] = useMachine(toggleMachine);
 
   return (
-    <button onClick={() => send('TOGGLE')}>
+    <button onClick={() => send({ type: 'TOGGLE' })}>
       {state.value === 'inactive'
         ? 'Click to activate'
         : 'Active! Click to deactivate'}

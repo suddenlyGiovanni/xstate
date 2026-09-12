@@ -1,7 +1,7 @@
 import './style.css';
 
 import { counterMachine } from './counterMachine';
-import { interpret } from 'xstate';
+import { createActor } from 'xstate';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
@@ -10,9 +10,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <button id="increment" type="button">Increment</button>
       <button id="decrement" type="button">Decrement</button>
     </div>
-    <p class="read-the-docs">
-      Click on the Vite and TypeScript logos to learn more
-    </p>
   </div>
 `;
 
@@ -26,7 +23,7 @@ function render(count: number): void {
   outputEl.innerHTML = `Count is ${count}`;
 }
 
-const counterActor = interpret(counterMachine);
+const counterActor = createActor(counterMachine);
 
 counterActor.subscribe((state) => {
   render(state.context.count);

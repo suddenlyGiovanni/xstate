@@ -1,43 +1,49 @@
-import { createActor, createMachine, assign } from '../src/index.ts';
-import { State } from '../src/State.ts';
+import z from 'zod';
+import { createActor, createMachine } from '../src/index.ts';
 
 const pedestrianStates = {
   initial: 'walk',
   states: {
     walk: {
+      contextSchema: z.object({
+        color: z.literal('walk')
+      }),
       on: {
-        PED_COUNTDOWN: 'wait'
+        PED_COUNTDOWN: { target: 'wait' }
       }
     },
     wait: {
       on: {
-        PED_COUNTDOWN: 'stop'
+        PED_COUNTDOWN: { target: 'stop' }
       }
     },
     stop: {}
   }
-};
+} as const;
 
 const lightMachine = createMachine({
   initial: 'green',
   states: {
     green: {
+      contextSchema: z.object({
+        color: z.literal('green')
+      }),
       on: {
-        TIMER: 'yellow',
-        POWER_OUTAGE: 'red',
+        TIMER: { target: 'yellow' },
+        POWER_OUTAGE: { target: 'red' },
         FORBIDDEN_EVENT: undefined
       }
     },
     yellow: {
       on: {
-        TIMER: 'red',
-        POWER_OUTAGE: 'red'
+        TIMER: { target: 'red' },
+        POWER_OUTAGE: { target: 'red' }
       }
     },
     red: {
       on: {
-        TIMER: 'green',
-        POWER_OUTAGE: 'red'
+        TIMER: { target: 'green' },
+        POWER_OUTAGE: { target: 'red' }
       },
       ...pedestrianStates
     }
@@ -96,85 +102,6 @@ describe('machine', () => {
   });
 
   describe('machine.provide', () => {
-    it('should override guards and actions', () => {
-      const machine = createMachine(
-        {
-          initial: 'foo',
-          context: {
-            foo: 'bar'
-          },
-          states: {
-            foo: {
-              entry: 'entryAction',
-              on: {
-                EVENT: {
-                  target: 'bar',
-                  guard: 'someCondition'
-                }
-              }
-            },
-            bar: {}
-          }
-        },
-        {
-          actions: {
-            entryAction: () => {
-              throw new Error('original entry');
-            }
-          },
-          guards: {
-            someCondition: () => false
-          }
-        }
-      );
-      let shouldThrow = true;
-      const differentMachine = machine.provide({
-        actions: {
-          entryAction: () => {
-            if (shouldThrow) {
-              throw new Error('new entry');
-            }
-          }
-        },
-        guards: { someCondition: () => true }
-      });
-
-      expect(createActor(differentMachine).getSnapshot().context).toEqual({
-        foo: 'bar'
-      });
-
-      expect(() => {
-        createActor(differentMachine).start();
-      }).toThrowErrorMatchingInlineSnapshot(`"new entry"`);
-
-      shouldThrow = false;
-      const actorRef = createActor(differentMachine).start();
-      actorRef.send({ type: 'EVENT' });
-
-      expect(actorRef.getSnapshot().value).toEqual('bar');
-    });
-
-    it('should not override context if not defined', () => {
-      const machine = createMachine({
-        context: {
-          foo: 'bar'
-        }
-      });
-      const differentMachine = machine.provide({});
-      const actorRef = createActor(differentMachine).start();
-      expect(actorRef.getSnapshot().context).toEqual({ foo: 'bar' });
-    });
-
-    it.skip('should override context (second argument)', () => {
-      // const differentMachine = configMachine.withConfig(
-      //   {},
-      //   { foo: 'different' }
-      // );
-      // expect(differentMachine.initialState.context).toEqual({
-      //   foo: 'different'
-      // });
-    });
-
     // https://github.com/davidkpiano/xstate/issues/674
     it('should throw if initial state is missing in a compound state', () => {
       expect(() => {
@@ -197,7 +124,14 @@ describe('machine', () => {
     });
 
     it('should lazily create context for all interpreter instances created from the same machine template created by `provide`', () => {
-      const machine = createMachine<{ foo: { prop: string } }>({
+      const machine = createMachine({
+        schemas: {
+          context: z.object({
+            foo: z.object({
+              prop: z.string()
+            })
+          })
+        },
         context: () => ({
           foo: { prop: 'baz' }
         })
@@ -262,68 +196,39 @@ describe('machine', () => {
                 }
               },
               on: {
-                TO_TWO: 'two'
+                TO_TWO: { target: 'two' }
               }
             },
             two: {
-              on: { TO_ONE: 'one' }
+              on: { TO_ONE: { target: 'one' } }
             }
           },
           on: {
-            TO_BAR: 'bar'
+            TO_BAR: { target: 'bar' }
           }
         },
         bar: {
           on: {
-            TO_FOO: 'foo'
+            TO_FOO: { target: 'foo' }
           }
         }
       }
     });
 
     it('should resolve the state value', () => {
-      const tempState = State.from('foo', undefined, resolveMachine);
-
-      const resolvedState = resolveMachine.resolveState(tempState);
+      const resolvedState = resolveMachine.resolveState({ value: 'foo' });
 
       expect(resolvedState.value).toEqual({
         foo: { one: { a: 'aa', b: 'bb' } }
       });
     });
 
-    it('should resolve the state configuration (implicit via events)', () => {
-      const tempState = State.from('foo', undefined, resolveMachine);
-
-      const resolvedState = resolveMachine.resolveState(tempState);
-
-      expect(resolvedState.nextEvents.sort()).toEqual(['TO_BAR', 'TO_TWO']);
-    });
-
-    it('should resolve .done', () => {
+    it('should resolve `status: done`', () => {
       const machine = createMachine({
         initial: 'foo',
         states: {
           foo: {
-            on: { NEXT: 'bar' }
-          },
-          bar: {
-            type: 'final'
-          }
-        }
-      });
-      const tempState = State.from('bar', undefined, machine);
-
-      const resolvedState = machine.resolveState(tempState);
-
-      expect(resolvedState.done).toBe(true);
-    });
-
-    it('should resolve from a state config object', () => {
-      const machine = createMachine({
-        initial: 'foo',
-        states: {
-          foo: {
-            on: { NEXT: 'bar' }
+            on: { NEXT: { target: 'bar' } }
           },
           bar: {
             type: 'final'
@@ -331,40 +236,9 @@ describe('machine', () => {
         }
       });
 
-      const actorRef = createActor(machine).start();
-      actorRef.send({ type: 'NEXT' });
-      const barState = actorRef.getSnapshot();
+      const resolvedState = machine.resolveState({ value: 'bar' });
 
-      const jsonBarState = JSON.parse(JSON.stringify(barState));
-
-      expect(machine.resolveState(jsonBarState).matches('bar')).toBeTruthy();
-    });
-
-    it('should terminate on a resolved final state', () => {
-      const machine = createMachine({
-        initial: 'foo',
-        states: {
-          foo: {
-            on: { NEXT: 'bar' }
-          },
-          bar: {
-            type: 'final'
-          }
-        }
-      });
-
-      const actorRef = createActor(machine).start();
-      actorRef.send({ type: 'NEXT' });
-      const persistedState = actorRef.getPersistedState();
-
-      const spy = jest.fn();
-      const actorRef2 = createActor(machine, { state: persistedState });
-      actorRef2.subscribe({
-        complete: spy
-      });
-
-      actorRef2.start();
-      expect(spy).toHaveBeenCalled();
+      expect(resolvedState.status).toBe('done');
     });
   });
 
@@ -374,7 +248,7 @@ describe('machine', () => {
         initial: 'a',
         states: {
           a: {
-            always: [{ target: 'b' }]
+            always: { target: 'b' }
           },
           b: {}
         }
@@ -434,12 +308,18 @@ describe('machine', () => {
 
   describe('combinatorial machines', () => {
     it('should support combinatorial machines (single-state)', () => {
-      const testMachine = createMachine<{ value: number }>({
+      const testMachine = createMachine({
+        // types: {} as { context: { value: number } },
+        schemas: {
+          context: z.object({ value: z.number() })
+        },
         context: { value: 42 },
         on: {
-          INC: {
-            actions: assign({ value: ({ context }) => context.value + 1 })
-          }
+          INC: ({ context }) => ({
+            context: {
+              value: context.value + 1
+            }
+          })
         }
       });
 
@@ -451,6 +331,21 @@ describe('machine', () => {
 
       expect(actorRef.getSnapshot().context.value).toEqual(43);
     });
+  });
+
+  it('should pass through schemas', () => {
+    const machine = createMachine({
+      schemas: {
+        context: z.object({ count: z.number() })
+      },
+      context: () => ({ count: 42 })
+    });
+
+    expect(machine.schemas).toEqual(
+      expect.objectContaining({
+        context: expect.anything()
+      })
+    );
   });
 });
 
@@ -465,5 +360,44 @@ describe('StateNode', () => {
       'POWER_OUTAGE',
       'FORBIDDEN_EVENT'
     ]);
+  });
+});
+
+describe('typestates', () => {
+  it('testing', () => {
+    const machine = createMachine({
+      schemas: {
+        context: z.object({
+          user: z.string().nullable()
+        })
+      },
+      context: {
+        user: null
+      },
+      initial: 'active',
+      states: {
+        active: {
+          contextSchema: z.object({
+            user: z.string()
+          }),
+          on: {
+            ACTIVATE: (x) => ({
+              target: 'inactive',
+              context: {
+                ...x.context,
+                user: 'test'
+              }
+            })
+          }
+        },
+        inactive: {
+          contextSchema: z.object({
+            user: z.null()
+          })
+        }
+      }
+    });
+
+    machine.states;
   });
 });

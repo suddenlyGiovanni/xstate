@@ -1,30 +1,31 @@
-import { assign, createMachine } from 'xstate';
-
-const types = {
-  context: {} as { feedback: string },
-  events: {} as
-    | {
-        type: 'feedback.good';
-      }
-    | {
-        type: 'feedback.bad';
-      }
-    | {
-        type: 'feedback.update';
-        value: string;
-      }
-    | { type: 'submit' }
-    | {
-        type: 'close';
-      }
-    | { type: 'back' }
-    | { type: 'restart' }
-};
+import { createMachine } from 'xstate';
 
 export const feedbackMachine = createMachine({
+  types: {
+    context: {} as { feedback: string },
+    events: {} as
+      | {
+          type: 'feedback.good';
+        }
+      | {
+          type: 'feedback.bad';
+        }
+      | {
+          type: 'feedback.update';
+          value: string;
+        }
+      | { type: 'submit' }
+      | {
+          type: 'close';
+        }
+      | { type: 'back' }
+      | { type: 'restart' }
+  },
+  guards: {
+    feedbackValid: ({ context }) => context.feedback.length > 0
+  },
   id: 'feedback',
   initial: 'prompt',
-  types,
   context: {
     feedback: ''
   },
@@ -37,22 +38,32 @@ export const feedbackMachine = createMachine({
     },
     form: {
       on: {
-        'feedback.update': {
-          actions: assign({
-            feedback: ({ event }) => event.value
-          })
+        'feedback.update': ({ context, event, guards, actions }, enq) => {
+          return {
+            context: {
+              ...context,
+              feedback: (({ event }) => event.value)({
+                context: context,
+                event: event
+              })
+            }
+          };
         },
         back: { target: 'prompt' },
-        submit: {
-          guard: ({ context }) => context.feedback.length > 0,
-          target: 'thanks'
+        submit: ({ context, event, guards, actions }, enq) => {
+          if (!guards['feedbackValid']({ context, event })) {
+            return;
+          }
+          return { target: 'thanks' };
         }
       }
     },
     thanks: {},
     closed: {
       on: {
-        restart: 'prompt'
+        restart: ({ context, event, guards, actions }, enq) => {
+          return { target: 'prompt', context: { ...context, feedback: '' } };
+        }
       }
     }
   },

@@ -1,76 +1,64 @@
-import { error } from './actions.ts';
-import { ActorStatus, createActor } from './interpreter.ts';
 import {
-  AnyActorContext,
+  allocateChildId,
+  assertChildIdFree,
+  reserveChildId
+} from './transitionActions.ts';
+import { resolveRegisteredActorSource } from './actorSource.ts';
+import {
+  ActorFromLogic,
+  AnyActorLogic,
   AnyActorRef,
-  AnyEventObject,
-  AnyState,
-  Spawner,
-  TODO
+  AnyActorScope,
+  ConditionalRequired,
+  InputFrom,
+  IsNotNever,
+  RegistryKeyForLogic,
+  SystemRegistry,
+  type RequiredLogicInput
 } from './types.ts';
-import { resolveReferencedActor } from './utils.ts';
+
+export type Spawner<TSystemRegistry extends SystemRegistry = SystemRegistry> = <
+  TLogic extends AnyActorLogic
+>(
+  src: TLogic,
+  ...[options]: ConditionalRequired<
+    [
+      options?: {
+        id?: string;
+        registryKey?: RegistryKeyForLogic<TLogic, TSystemRegistry>;
+        input?: InputFrom<TLogic>;
+        syncSnapshot?: boolean;
+      } & { [K in RequiredLogicInput<TLogic>]: unknown }
+    ],
+    IsNotNever<RequiredLogicInput<TLogic>>
+  >
+) => ActorFromLogic<TLogic>;
 
 export function createSpawner(
-  actorContext: AnyActorContext,
-  { machine, context }: AnyState,
-  event: AnyEventObject,
+  actorScope: AnyActorScope,
+  actors: Record<string, AnyActorLogic>,
   spawnedChildren: Record<string, AnyActorRef>
 ): Spawner {
-  const spawn: Spawner = (src, options = {}) => {
-    const { systemId } = options;
-    if (typeof src === 'string') {
-      const referenced = resolveReferencedActor(
-        machine.implementations.actors[src]
-      );
-
-      if (!referenced) {
-        throw new Error(
-          `Actor logic '${src}' not implemented in machine '${machine.id}'`
-        );
-      }
-
-      const input = 'input' in options ? options.input : referenced.input;
-
-      // TODO: this should also receive `src`
-      const actor = createActor(referenced.src, {
-        id: options.id,
-        parent: actorContext.self,
-        input:
-          typeof input === 'function'
-            ? input({
-                context,
-                event,
-                self: actorContext.self
-              })
-            : input,
-        systemId
-      }) as any;
-      spawnedChildren[actor.id] = actor;
-      return actor;
-    } else {
-      // TODO: this should also receive `src`
-      return createActor(src, {
-        id: options.id,
-        parent: actorContext.self,
-        input: options.input,
-        systemId
-      });
+  return ((src, options) => {
+    const referencedSrc = resolveRegisteredActorSource(actors, src);
+    // Generated ids come from the same transaction allocator as `enq.spawn`,
+    // so context-factory allocations persist with the snapshot and never
+    // collide with later spawns.
+    const id =
+      options?.id ?? allocateChildId(actorScope, referencedSrc ?? src).id;
+    if (options?.id !== undefined) {
+      assertChildIdFree(actorScope, options.id);
+      reserveChildId(actorScope, options.id);
     }
-  };
-  return (src, options) => {
-    const actorRef = spawn(src, options) as TODO; // TODO: fix types
-    spawnedChildren[actorRef.id] = actorRef;
-    actorContext.defer(() => {
-      if (actorRef.status === ActorStatus.Stopped) {
-        return;
-      }
-      try {
-        actorRef.start?.();
-      } catch (err) {
-        actorContext.self.send(error(actorRef.id, err));
-        return;
-      }
+    const actor = actorScope.system.createActorRef(src, {
+      id,
+      parent: actorScope.self,
+      syncSnapshot: options?.syncSnapshot,
+      input: options?.input,
+      src: referencedSrc ?? src,
+      registryKey: options?.registryKey
     });
-    return actorRef;
-  };
+    spawnedChildren[actor.id] = actor;
+    return actor;
+  }) as Spawner;
 }
