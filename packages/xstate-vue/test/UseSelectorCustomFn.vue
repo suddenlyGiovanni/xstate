@@ -2,20 +2,20 @@
   <div data-testid="name">{{ name }}</div>
   <button
     data-testid="sendUpper"
-    @click="service.send({ type: 'CHANGE', value: 'DAVID' })"
+    @click="actorRef.send({ type: 'CHANGE', value: 'DAVID' })"
   ></button>
   <button
     data-testid="sendOther"
-    @click="service.send({ type: 'CHANGE', value: 'other' })"
+    @click="actorRef.send({ type: 'CHANGE', value: 'other' })"
   ></button>
 </template>
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import { assign, createMachine } from 'xstate';
-import { useInterpret, useSelector } from '../src/index.ts';
+import { createMachine } from 'xstate';
+import { useActorRef, useSelector } from '../src/index.ts';
 
-const machine = createMachine<{ name: string }>({
+const machine = createMachine({
   initial: 'active',
   context: {
     name: 'david'
@@ -24,21 +24,21 @@ const machine = createMachine<{ name: string }>({
     active: {}
   },
   on: {
-    CHANGE: {
-      actions: assign({ name: ({event}) => event.value })
-    }
+    CHANGE: ({ event }) => ({
+      context: { name: event.value }
+    })
   }
 });
 
 export default defineComponent({
   setup() {
-    const service = useInterpret(machine);
+    const actorRef = useActorRef(machine);
     const name = useSelector(
-      service,
+      actorRef,
       (state) => state.context.name,
       (a, b) => a.toUpperCase() === b.toUpperCase()
     );
-    return { service, name };
+    return { actorRef, name };
   }
 });
 </script>

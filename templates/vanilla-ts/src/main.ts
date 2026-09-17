@@ -1,6 +1,9 @@
 import './style.css';
 import { feedbackMachine } from './feedbackMachine';
-import { interpret } from 'xstate';
+import { createActor } from 'xstate';
+import { createInspector } from '@statelyai/sdk';
+
+const inspector = createInspector();
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
@@ -18,22 +21,15 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
 `;
 
-const actor = interpret(feedbackMachine).start();
+const actor = createActor(feedbackMachine, { inspect: inspector.inspect });
 
 (window as any).feedbackActor = actor;
 
 actor.subscribe((state) => {
   console.group('State update');
   console.log('%cState value:', 'background-color: #056dff', state.value);
-  console.log('%cState:', 'background-color: #056dff', state);
-  console.groupCollapsed('%cNext events:', 'background-color: #056dff');
-  console.log(
-    state.nextEvents
-      .map((eventType) => {
-        return `feedbackActor.send({ type: '${eventType}' })`;
-      })
-      .join('\n\n')
-  );
-  console.groupEnd();
+  console.log('%cContext:', 'background-color: #056dff', state.context);
   console.groupEnd();
 });
+
+actor.start();

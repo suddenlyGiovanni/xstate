@@ -1,7 +1,10 @@
 import './style.css';
 
 import { toggleMachine } from './toggleMachine';
-import { interpret } from 'xstate';
+import { createActor } from 'xstate';
+import { createInspector } from '@statelyai/sdk';
+
+const inspector = createInspector();
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
@@ -12,7 +15,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
 `;
 
-const toggleActor = interpret(toggleMachine).start();
+const toggleActor = createActor(toggleMachine, { inspect: inspector.inspect });
 
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')!;
 const outputEl = document.querySelector<HTMLDivElement>('#output')!;
@@ -20,6 +23,8 @@ const outputEl = document.querySelector<HTMLDivElement>('#output')!;
 toggleActor.subscribe((snapshot) => {
   outputEl.innerHTML = snapshot.value === 'active' ? 'Active' : 'Inactive';
 });
+
+toggleActor.start();
 
 toggleButton?.addEventListener('click', () => {
   toggleActor.send({ type: 'toggle' });

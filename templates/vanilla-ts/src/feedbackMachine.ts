@@ -1,62 +1,58 @@
-import { assign, createMachine } from 'xstate';
+import { setup, types } from 'xstate';
 
-const types = {
-  context: {} as { feedback: string },
-  events: {} as
-    | {
-        type: 'feedback.good';
-      }
-    | {
-        type: 'feedback.bad';
-      }
-    | {
-        type: 'feedback.update';
-        value: string;
-      }
-    | { type: 'submit' }
-    | {
-        type: 'close';
-      }
-    | { type: 'back' }
-    | { type: 'restart' }
-};
-
-export const feedbackMachine = createMachine({
+export const feedbackMachine = setup({
+  schemas: {
+    context: types<{ feedback: string }>(),
+    events: {
+      'feedback.good': types<{}>(),
+      'feedback.bad': types<{}>(),
+      'feedback.update': types<{ value: string }>(),
+      submit: types<{}>(),
+      close: types<{}>(),
+      back: types<{}>(),
+      restart: types<{}>()
+    }
+  }
+}).createMachine({
   id: 'feedback',
   initial: 'prompt',
-  types,
   context: {
     feedback: ''
   },
   states: {
     prompt: {
       on: {
-        'feedback.good': 'thanks',
-        'feedback.bad': 'form'
+        'feedback.good': { target: 'thanks' },
+        'feedback.bad': { target: 'form' }
       }
     },
     form: {
       on: {
-        'feedback.update': {
-          actions: assign({
-            feedback: ({ event }) => event.value
-          })
-        },
+        'feedback.update': ({ context, event }) => ({
+          context: { ...context, feedback: event.value }
+        }),
         back: { target: 'prompt' },
-        submit: {
-          guard: ({ context }) => context.feedback.length > 0,
-          target: 'thanks'
+        submit: ({ context }) => {
+          // Only submit when feedback has been provided
+          if (context.feedback.length === 0) {
+            return;
+          }
+
+          return { target: 'thanks' };
         }
       }
     },
     thanks: {},
     closed: {
       on: {
-        restart: 'prompt'
+        restart: ({ context }) => ({
+          target: 'prompt',
+          context: { ...context, feedback: '' }
+        })
       }
     }
   },
   on: {
-    close: '.closed'
+    close: { target: '.closed' }
   }
 });

@@ -1,14 +1,72 @@
-import { createMachine, createActor } from '../src/index';
+import z from 'zod';
+import { createMachine, createActor, assertEvent } from '../src/index';
+import { createMachineFromConfig } from '../src/createMachineFromConfig';
 
 describe('event descriptors', () => {
+  it('selects serialized transition arrays by shallow event payload matches', () => {
+    const machine = createMachineFromConfig({
+      initial: 'pending',
+      states: {
+        pending: {
+          on: {
+            result: [
+              {
+                matches: { actorId: 'first' },
+                target: 'first'
+              },
+              {
+                matches: { actorId: 'second' },
+                target: 'second'
+              }
+            ]
+          }
+        },
+        first: {},
+        second: {}
+      }
+    });
+    const actor = createActor(machine).start();
+
+    actor.send({ type: 'result', actorId: 'second' } as any);
+
+    expect(actor.getSnapshot().value).toBe('second');
+  });
+
+  it('selects canonical actor events by actor ID', () => {
+    const machine = createMachine({
+      initial: 'pending',
+      states: {
+        pending: {
+          on: {
+            'xstate.done.actor': {
+              matches: { actorId: 'job' },
+              target: 'complete'
+            }
+          }
+        },
+        complete: {}
+      }
+    });
+    const actor = createActor(machine).start();
+
+    actor.send({
+      type: 'xstate.done.actor',
+      actorId: 'job',
+      sessionId: 'x:1',
+      output: undefined
+    } as any);
+
+    expect(actor.getSnapshot().value).toBe('complete');
+  });
+
   it('should fallback to using wildcard transition definition (if specified)', () => {
     const machine = createMachine({
       initial: 'A',
       states: {
         A: {
           on: {
-            FOO: 'B',
-            '*': 'C'
+            FOO: { target: 'B' },
+            '*': { target: 'C' }
           }
         },
         B: {},
@@ -27,8 +85,8 @@ describe('event descriptors', () => {
       states: {
         A: {
           on: {
-            '*': 'fail',
-            NEXT: 'pass'
+            '*': { target: 'fail' },
+            NEXT: { target: 'pass' }
           }
         },
         fail: {},
@@ -47,8 +105,8 @@ describe('event descriptors', () => {
       states: {
         A: {
           on: {
-            'foo.*': 'fail',
-            'foo.bar': 'pass'
+            'foo.*': { target: 'fail' },
+            'foo.bar': { target: 'pass' }
           }
         },
         fail: {},
@@ -67,8 +125,8 @@ describe('event descriptors', () => {
       states: {
         A: {
           on: {
-            'foo.*': 'fail',
-            'foo.bar.*': 'pass'
+            'foo.*': { target: 'fail' },
+            'foo.bar.*': { target: 'pass' }
           }
         },
         fail: {},
@@ -87,11 +145,12 @@ describe('event descriptors', () => {
       states: {
         A: {
           on: {
-            'foo.bar.*': {
-              target: 'fail',
-              guard: () => false
+            'foo.bar.*': () => {
+              if (1 + 1 !== 2) {
+                return { target: 'fail' };
+              }
             },
-            'foo.*': 'pass'
+            'foo.*': { target: 'pass' }
           }
         },
         fail: {},
@@ -104,13 +163,37 @@ describe('event descriptors', () => {
     expect(service.getSnapshot().value).toBe('pass');
   });
 
+  it('should fall back to wildcard descriptor when exact descriptor guard fails', () => {
+    const machine = createMachine({
+      initial: 'A',
+      states: {
+        A: {
+          on: {
+            'foo.bar': () => {
+              if (false) {
+                return { target: 'fail' };
+              }
+            },
+            'foo.*': { target: 'pass' }
+          }
+        },
+        fail: {},
+        pass: {}
+      }
+    });
+
+    const service = createActor(machine).start();
+    service.send({ type: 'foo.bar' });
+    expect(service.getSnapshot().value).toBe('pass');
+  });
+
   it('should NOT support non-tokenized wildcards', () => {
     const machine = createMachine({
       initial: 'start',
       states: {
         start: {
           on: {
-            'event*': 'success'
+            'event*': { target: 'success' }
           }
         },
         success: {
@@ -138,7 +221,7 @@ describe('event descriptors', () => {
       states: {
         start: {
           on: {
-            'event.*': 'success'
+            'event.*': { target: 'success' }
           }
         },
         success: {
@@ -166,7 +249,7 @@ describe('event descriptors', () => {
       states: {
         start: {
           on: {
-            'event.*': 'success'
+            'event.*': { target: 'success' }
           }
         },
         success: {
@@ -200,7 +283,7 @@ describe('event descriptors', () => {
       states: {
         start: {
           on: {
-            'event.*': 'success'
+            'event.*': { target: 'success' }
           }
         },
         success: {
@@ -222,7 +305,7 @@ describe('event descriptors', () => {
       states: {
         start: {
           on: {
-            'event.foo.bar.*': 'success'
+            'event.foo.bar.*': { target: 'success' }
           }
         },
         success: {
@@ -239,13 +322,15 @@ describe('event descriptors', () => {
   });
 
   it('should not match infix wildcards', () => {
+    const warnSpy = vi.spyOn(console, 'warn');
+
     const machine = createMachine({
       initial: 'start',
       states: {
         start: {
           on: {
-            'event.*.bar.*': 'success',
-            '*.event.*': 'success'
+            'event.*.bar.*': { target: 'success' },
+            '*.event.*': { target: 'success' }
           }
         },
         success: {
@@ -260,7 +345,7 @@ describe('event descriptors', () => {
 
     expect(actorRef1.getSnapshot().matches('success')).toBeFalsy();
 
-    expect(console.warn).toMatchMockCallsInlineSnapshot(`
+    expect(warnSpy.mock.calls).toMatchInlineSnapshot(`
       [
         [
           "Wildcards can only be the last token of an event descriptor (e.g., "event.*") or the entire event descriptor ("*"). Check the "event.*.bar.*" event.",
@@ -276,6 +361,7 @@ describe('event descriptors', () => {
         ],
       ]
     `);
+    warnSpy.mockClear();
 
     const actorRef2 = createActor(machine).start();
 
@@ -283,7 +369,7 @@ describe('event descriptors', () => {
 
     expect(actorRef2.getSnapshot().matches('success')).toBeFalsy();
 
-    expect(console.warn).toMatchMockCallsInlineSnapshot(`
+    expect(warnSpy.mock.calls).toMatchInlineSnapshot(`
       [
         [
           "Wildcards can only be the last token of an event descriptor (e.g., "event.*") or the entire event descriptor ("*"). Check the "event.*.bar.*" event.",
@@ -299,13 +385,15 @@ describe('event descriptors', () => {
   });
 
   it('should not match wildcards as part of tokens', () => {
+    const warnSpy = vi.spyOn(console, 'warn');
+
     const machine = createMachine({
       initial: 'start',
       states: {
         start: {
           on: {
-            'event*.bar.*': 'success',
-            '*event.*': 'success'
+            'event*.bar.*': { target: 'success' },
+            '*event.*': { target: 'success' }
           }
         },
         success: {
@@ -320,7 +408,7 @@ describe('event descriptors', () => {
 
     expect(actorRef1.getSnapshot().matches('success')).toBeFalsy();
 
-    expect(console.warn).toMatchMockCallsInlineSnapshot(`
+    expect(warnSpy.mock.calls).toMatchInlineSnapshot(`
       [
         [
           "Wildcards can only be the last token of an event descriptor (e.g., "event.*") or the entire event descriptor ("*"). Check the "event*.bar.*" event.",
@@ -330,6 +418,7 @@ describe('event descriptors', () => {
         ],
       ]
     `);
+    warnSpy.mockClear();
 
     const actorRef2 = createActor(machine).start();
 
@@ -337,7 +426,7 @@ describe('event descriptors', () => {
 
     expect(actorRef2.getSnapshot().matches('success')).toBeFalsy();
 
-    expect(console.warn).toMatchMockCallsInlineSnapshot(`
+    expect(warnSpy.mock.calls).toMatchInlineSnapshot(`
       [
         [
           "Wildcards can only be the last token of an event descriptor (e.g., "event.*") or the entire event descriptor ("*"). Check the "event*.bar.*" event.",
@@ -347,5 +436,96 @@ describe('event descriptors', () => {
         ],
       ]
     `);
+  });
+
+  it('should allow assertEvent to use partial descriptors', () => {
+    type FeedbackEvents =
+      | {
+          type: 'FEEDBACK.MESSAGE';
+          message: string;
+        }
+      | {
+          type: 'FEEDBACK.RATE';
+          rate: number;
+        }
+      | { type: 'OTHER' };
+
+    const handleEventSpy = vi.fn();
+    const machine = createMachine({
+      schemas: {
+        events: {
+          'FEEDBACK.MESSAGE': z.object({ message: z.string() }),
+          'FEEDBACK.RATE': z.object({ rate: z.number() })
+        }
+      },
+      actions: {
+        handleEvent: ({ event }: { event: FeedbackEvents }) => {
+          assertEvent(event, 'FEEDBACK.*');
+
+          if (event.type === 'FEEDBACK.MESSAGE') {
+            event.message satisfies string;
+
+            // @ts-expect-error
+            event.message satisfies number;
+            // @ts-expect-error
+            event.rate;
+          } else {
+            event.rate satisfies number;
+
+            // @ts-expect-error
+            event.rate satisfies string;
+            // @ts-expect-error
+            event.message;
+          }
+
+          handleEventSpy(event);
+        }
+      },
+      initial: 'listening',
+      states: {
+        listening: {
+          on: {
+            'FEEDBACK.*': ({ actions, event }, enq) => {
+              enq(actions.handleEvent, { event });
+            }
+          }
+        }
+      }
+    });
+
+    const actor = createActor(machine).start();
+    actor.send({ type: 'FEEDBACK.MESSAGE', message: 'hello' });
+    actor.send({ type: 'FEEDBACK.RATE', rate: 5 });
+
+    expect(handleEventSpy).toHaveBeenCalledTimes(2);
+    expect(handleEventSpy).toHaveBeenNthCalledWith(1, {
+      type: 'FEEDBACK.MESSAGE',
+      message: 'hello'
+    });
+    expect(handleEventSpy).toHaveBeenNthCalledWith(2, {
+      type: 'FEEDBACK.RATE',
+      rate: 5
+    });
+  });
+
+  it('should throw if assertEvent partial descriptor does not match', () => {
+    type FeedbackEvents =
+      | {
+          type: 'FEEDBACK.MESSAGE';
+          message: string;
+        }
+      | {
+          type: 'FEEDBACK.RATE';
+          rate: number;
+        }
+      | { type: 'OTHER' };
+
+    const nonFeedbackEvent = { type: 'OTHER' } as FeedbackEvents;
+
+    expect(() =>
+      assertEvent(nonFeedbackEvent, 'FEEDBACK.*')
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: Expected event {"type":"OTHER"} to have type matching "FEEDBACK.*"]`
+    );
   });
 });

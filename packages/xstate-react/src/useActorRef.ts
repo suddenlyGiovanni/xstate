@@ -1,117 +1,137 @@
-import isDevelopment from '#is-development';
-import { useEffect, useState } from 'react';
-import {
-  AnyActorLogic,
-  AnyActor,
-  AnyStateMachine,
-  AreAllImplementationsAssumedToBeProvided,
-  InternalMachineImplementations,
-  createActor,
-  ActorRefFrom,
-  ActorOptions,
-  Observer,
-  StateFrom,
-  toObserver,
-  SnapshotFrom,
-  TODO,
-  ActorStatus
-} from 'xstate';
-import useConstant from './useConstant.ts';
+import { useEffect, useRef, useState } from 'react';
 import useIsomorphicLayoutEffect from 'use-isomorphic-layout-effect';
+import {
+  Actor,
+  ActorOptions,
+  AnyActorLogic,
+  AnyStateMachine,
+  Observer,
+  SnapshotFrom,
+  createActor,
+  toObserver,
+  type ConditionalRequired,
+  type IsNotNever,
+  type RequiredActorOptionsKeys
+} from 'xstate';
 
-export function useIdleInterpreter(
-  machine: AnyActorLogic,
-  options: Partial<ActorOptions<AnyActorLogic>>
-): AnyActor {
-  if (isDevelopment) {
-    const [initialMachine] = useState(machine);
-
-    if (machine.config !== initialMachine.config) {
-      console.warn(
-        `Actor logic has changed between renders. This is not supported and may lead to invalid snapshots.`
-      );
-    }
-  }
-
-  const actorRef = useConstant(() => {
-    return createActor(machine as AnyStateMachine, options);
+export function useIdleActorRef<TLogic extends AnyActorLogic>(
+  logic: TLogic,
+  ...[options]: ConditionalRequired<
+    [
+      options?: ActorOptions<TLogic> & {
+        [K in RequiredActorOptionsKeys<TLogic>]: unknown;
+      }
+    ],
+    IsNotNever<RequiredActorOptionsKeys<TLogic>>
+  >
+): [Actor<TLogic>, (actorRef: Actor<TLogic>) => void] {
+  let [actorRef, setActorRef] = useState(() => {
+    return createActor(logic, options);
   });
+
+  if (logic.config !== (actorRef.logic as any).config) {
+    const newActorRef = createActor(logic, {
+      ...options,
+      snapshot: (actorRef.getPersistedSnapshot as any)({
+        __unsafeAllowInlineActors: true
+      })
+    });
+    setActorRef(newActorRef);
+    actorRef = newActorRef;
+  }
 
   // TODO: consider using `useAsapEffect` that would do this in `useInsertionEffect` is that's available
   useIsomorphicLayoutEffect(() => {
-    (actorRef.logic as AnyStateMachine).implementations = (
-      machine as AnyStateMachine
-    ).implementations;
+    (actorRef.logic as any as AnyStateMachine).sources = (
+      logic as any as AnyStateMachine
+    ).sources;
   });
 
-  return actorRef as any;
+  return [actorRef, setActorRef];
 }
 
-type RestParams<TLogic extends AnyActorLogic> = TLogic extends AnyStateMachine
-  ? AreAllImplementationsAssumedToBeProvided<
-      TLogic['__TResolvedTypesMeta']
-    > extends false
-    ? [
-        options: ActorOptions<TLogic> &
-          InternalMachineImplementations<
-            TLogic['__TContext'],
-            TLogic['__TEvent'],
-            TODO,
-            TODO,
-            TODO,
-            TLogic['__TResolvedTypesMeta'],
-            true
-          >,
-        observerOrListener?:
-          | Observer<StateFrom<TLogic>>
-          | ((value: StateFrom<TLogic>) => void)
-      ]
-    : [
-        options?: ActorOptions<TLogic> &
-          InternalMachineImplementations<
-            TLogic['__TContext'],
-            TLogic['__TEvent'],
-            TODO,
-            TODO,
-            TODO,
-            TLogic['__TResolvedTypesMeta']
-          >,
-        observerOrListener?:
-          | Observer<StateFrom<TLogic>>
-          | ((value: StateFrom<TLogic>) => void)
-      ]
-  : [
-      options?: ActorOptions<TLogic>,
-      observerOrListener?:
-        | Observer<SnapshotFrom<TLogic>>
-        | ((value: SnapshotFrom<TLogic>) => void)
-    ];
+export function useActorLifecycle<TLogic extends AnyActorLogic>(
+  actorRef: Actor<TLogic>,
+  setActorRef: (actorRef: Actor<TLogic>) => void,
+  createReplacement: () => Actor<TLogic>
+): void {
+  const pendingStopsRef = useRef(new Map<Actor<TLogic>, () => void>());
+
+  useEffect(() => {
+    const cancelPendingStop = pendingStopsRef.current.get(actorRef);
+    if (cancelPendingStop) {
+      cancelPendingStop();
+      pendingStopsRef.current.delete(actorRef);
+    }
+
+    // If the actor was stopped before this effect reconnected, create a fresh
+    // actor. A stopped actor cannot be restarted.
+    if (
+      (actorRef as any)._processingStatus ===
+        2 /* ProcessingStatus.Stopped */ &&
+      (actorRef.getSnapshot() as any)?.status === 'stopped'
+    ) {
+      const newActor = createReplacement();
+      newActor.start();
+      setActorRef(newActor);
+      return;
+    }
+
+    actorRef.start();
+    return () => {
+      let canceled = false;
+      const cancel = () => {
+        canceled = true;
+      };
+      pendingStopsRef.current.set(actorRef, cancel);
+
+      queueMicrotask(() => {
+        if (!canceled) {
+          actorRef.stop();
+        }
+        if (pendingStopsRef.current.get(actorRef) === cancel) {
+          pendingStopsRef.current.delete(actorRef);
+        }
+      });
+    };
+  }, [actorRef]);
+}
 
 export function useActorRef<TLogic extends AnyActorLogic>(
   machine: TLogic,
-  ...[options = {}, observerOrListener]: RestParams<TLogic>
-): ActorRefFrom<TLogic> {
-  const actorRef = useIdleInterpreter(machine, options);
+  ...[options, observerOrListener]: IsNotNever<
+    RequiredActorOptionsKeys<TLogic>
+  > extends true
+    ? [
+        options: ActorOptions<TLogic> & {
+          [K in RequiredActorOptionsKeys<TLogic>]: unknown;
+        },
+        observerOrListener?:
+          | Observer<SnapshotFrom<TLogic>>
+          | ((value: SnapshotFrom<TLogic>) => void)
+      ]
+    : [
+        options?: ActorOptions<TLogic>,
+        observerOrListener?:
+          | Observer<SnapshotFrom<TLogic>>
+          | ((value: SnapshotFrom<TLogic>) => void)
+      ]
+): Actor<TLogic> {
+  const [actorRef, setActorRef] = useIdleActorRef(machine, options);
 
   useEffect(() => {
     if (!observerOrListener) {
       return;
     }
-    let sub = actorRef.subscribe(toObserver(observerOrListener));
+    const sub = actorRef.subscribe(toObserver(observerOrListener));
     return () => {
       sub.unsubscribe();
     };
   }, [observerOrListener]);
 
-  useEffect(() => {
-    actorRef.start();
+  useActorLifecycle(actorRef, setActorRef, () =>
+    createActor(machine, actorRef.options)
+  );
 
-    return () => {
-      actorRef.stop();
-      actorRef.status = ActorStatus.NotStarted;
-      (actorRef as any)._initState();
-    };
-  }, []);
-
-  return actorRef as any;
+  return actorRef;
 }

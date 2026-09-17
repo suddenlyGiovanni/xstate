@@ -1,67 +1,77 @@
-import { assign, createMachine, fromCallback } from 'xstate';
+import { createCallbackLogic, setup, types } from 'xstate';
 
-export const timerMachine = createMachine({
-  types: {} as {
-    events:
-      | { type: 'start' }
-      | { type: 'stop' }
-      | { type: 'reset' }
-      | { type: 'minute' }
-      | { type: 'second' }
-      | { type: 'TICK' };
+export const timerMachine = setup({
+  schemas: {
+    context: types<{ seconds: number }>(),
+    events: {
+      start: types<{}>(),
+      stop: types<{}>(),
+      reset: types<{}>(),
+      minute: types<{}>(),
+      second: types<{}>(),
+      TICK: types<{}>()
+    }
   },
+  actors: {
+    ticks: createCallbackLogic(({ sendBack }) => {
+      const interval = setInterval(() => {
+        sendBack({ type: 'TICK' });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    })
+  }
+}).createMachine({
+  id: 'timer',
+  initial: 'stopped',
   context: {
     seconds: 0
   },
-  initial: 'stopped',
   states: {
     stopped: {
       on: {
-        start: {
-          guard: ({ context }) => context.seconds > 0,
-          target: 'running'
+        start: ({ context }) => {
+          // Can only start a timer that has time on it
+          if (context.seconds === 0) {
+            return;
+          }
+
+          return { target: 'running' };
         },
-        minute: {
-          actions: assign({
-            seconds: ({ context }) => context.seconds + 60
-          })
-        },
-        second: {
-          actions: assign({
-            seconds: ({ context }) => context.seconds + 1
-          })
-        }
+        minute: ({ context }) => ({
+          context: { ...context, seconds: context.seconds + 60 }
+        }),
+        second: ({ context }) => ({
+          context: { ...context, seconds: context.seconds + 1 }
+        })
       }
     },
     running: {
       invoke: {
-        src: fromCallback(({ sendBack }) => {
-          const interval = setInterval(() => {
-            sendBack({ type: 'TICK' });
-          }, 1000);
-          return () => clearInterval(interval);
-        })
+        src: 'ticks'
       },
       on: {
-        stop: 'stopped',
-        TICK: {
-          actions: assign({
-            seconds: ({ context }) => context.seconds - 1
-          })
-        }
+        stop: { target: 'stopped' },
+        TICK: ({ context }) => ({
+          context: { ...context, seconds: context.seconds - 1 }
+        })
       },
-      always: {
-        guard: ({ context }) => context.seconds === 0,
-        target: 'stopped'
+      always: ({ context }) => {
+        if (context.seconds > 0) {
+          return;
+        }
+
+        return { target: 'stopped' };
       }
     }
   },
   on: {
-    reset: {
-      guard: ({ context }) => context.seconds > 0,
-      actions: assign({
-        seconds: 0
-      })
+    reset: ({ context }) => {
+      if (context.seconds === 0) {
+        return;
+      }
+
+      return { context: { ...context, seconds: 0 } };
     }
   }
 });

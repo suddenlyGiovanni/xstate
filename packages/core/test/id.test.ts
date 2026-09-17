@@ -1,5 +1,11 @@
 import { testAll } from './utils';
-import { createMachine, createActor } from '../src/index.ts';
+import {
+  createMachine,
+  createActor,
+  transition,
+  initialTransition,
+  getNextSnapshot
+} from '../src/index.ts';
 
 const idMachine = createMachine({
   initial: 'A',
@@ -11,18 +17,18 @@ const idMachine = createMachine({
         foo: {
           id: 'A_foo',
           on: {
-            NEXT: '#A_bar'
+            NEXT: { target: '#A_bar' }
           }
         },
         bar: {
           id: 'A_bar',
           on: {
-            NEXT: '#B_foo'
+            NEXT: { target: '#B_foo' }
           }
         }
       },
       on: {
-        NEXT_DOT_RESOLVE: '#B.bar'
+        NEXT_DOT_RESOLVE: { target: '#B.bar' }
       }
     },
     B: {
@@ -32,14 +38,14 @@ const idMachine = createMachine({
         foo: {
           id: 'B_foo',
           on: {
-            NEXT: '#B_bar',
-            NEXT_DOT: '#B.dot'
+            NEXT: { target: '#B_bar' },
+            NEXT_DOT: { target: '#B.dot' }
           }
         },
         bar: {
           id: 'B_bar',
           on: {
-            NEXT: '#A_foo'
+            NEXT: { target: '#A_foo' }
           }
         },
         dot: {}
@@ -72,7 +78,7 @@ describe('State node IDs', () => {
     const machine = createMachine({
       initial: 'foo',
       on: {
-        ACTION: '#bar.qux.quux'
+        ACTION: { target: '#bar.qux.quux' }
       },
       states: {
         foo: {
@@ -107,5 +113,105 @@ describe('State node IDs', () => {
         qux: 'quux'
       }
     });
+  });
+
+  it('should work with keys that have escaped periods', () => {
+    const machine = createMachine({
+      initial: 'start',
+      states: {
+        start: {
+          on: {
+            escaped: { target: 'foo\\.bar' },
+            unescaped: { target: 'foo.bar' }
+          }
+        },
+        'foo.bar': {},
+        foo: {
+          initial: 'bar',
+          states: {
+            bar: {}
+          }
+        }
+      }
+    });
+
+    const [initialState] = initialTransition(machine);
+    const [escapedState] = transition(machine, initialState, {
+      type: 'escaped'
+    });
+
+    expect(escapedState.value).toEqual('foo.bar');
+
+    const [unescapedState] = transition(machine, initialState, {
+      type: 'unescaped'
+    });
+    expect(unescapedState.value).toEqual({ foo: 'bar' });
+  });
+
+  it('should work with IDs that have escaped periods', () => {
+    const machine = createMachine({
+      initial: 'start',
+      states: {
+        start: {
+          on: {
+            escaped: { target: '#foo\\.bar' },
+            unescaped: { target: '#foo.bar' }
+          }
+        },
+        stateWithDot: {
+          id: 'foo.bar'
+        },
+        foo: {
+          id: 'foo',
+          initial: 'bar',
+          states: {
+            bar: {}
+          }
+        }
+      }
+    });
+
+    const [initialState] = initialTransition(machine);
+    const [escapedState] = transition(machine, initialState, {
+      type: 'escaped'
+    });
+
+    expect(escapedState.value).toEqual('stateWithDot');
+
+    const [unescapedState] = transition(machine, initialState, {
+      type: 'unescaped'
+    });
+    expect(unescapedState.value).toEqual({ foo: 'bar' });
+  });
+
+  it("should not treat escaped backslash as period's escape", () => {
+    const machine = createMachine({
+      initial: 'start',
+      states: {
+        start: {
+          on: {
+            EV: { target: '#some\\\\.thing' }
+          }
+        },
+        foo: {
+          id: 'some\\.thing'
+        },
+        bar: {
+          id: 'some\\',
+          initial: 'baz',
+          states: {
+            baz: {},
+            thing: {}
+          }
+        }
+      }
+    });
+
+    const [initialState] = initialTransition(machine);
+    const [escapedState] = transition(machine, initialState, {
+      type: 'EV'
+    });
+
+    expect(escapedState.value).toEqual({ bar: 'thing' });
   });
 });

@@ -1,0 +1,54 @@
+packages:
+  - 'packages/*'
+  - 'scripts/*'
+  - 'examples/*'
+  - 'examples/_shared/*'
+
+allowBuilds:
+  '@parcel/watcher': true
+  '@scarf/scarf': true
+  better-sqlite3: true
+  cbor-extract: true
+  core-js: true
+  deasync: false
+  esbuild: true
+  fsevents: true
+  husky: true
+  lmdb: true
+  msgpackr-extract: true
+  oxc-resolver: true
+  parcel-bundler: true
+  protobufjs: true
+  sharp: false
+  svelte-preprocess: true
+  vue-demi: true
+  workerd: false
+
+linkWorkspacePackages: true
+
+minimumReleaseAgeExclude:
+  - '@changesets/apply-release-plan@8.0.0'
+  - '@changesets/assemble-release-plan@7.0.0'
+  - '@changesets/changelog-git@1.0.0'
+  - '@changesets/cli@3.0.0'
+  - '@changesets/config@4.0.0'
+  - '@changesets/errors@1.0.0'
+  - '@changesets/get-dependents-graph@3.0.0'
+  - '@changesets/git@4.0.0'
+  - '@changesets/parse@1.0.0'
+  - '@changesets/pre@3.0.0'
+  - '@changesets/read@1.0.0'
+  - '@changesets/should-skip-package@1.0.0'
+  - '@changesets/types@7.0.0'
+  - '@changesets/write@1.0.0'
+  - svelte-check@4.7.6
+
+overrides:
+  '@types/node': 25.2.1
+  stylus: 0.55.0
+  vue: 3.5.17
+  yaml: 2.8.2
+
+patchedDependencies:
+  '@preconstruct/cli@2.8.13': patches/@preconstruct__cli@2.8.13.patch
+  '@vue/test-utils@2.4.6': patches/@vue__test-utils@2.4.6.patch

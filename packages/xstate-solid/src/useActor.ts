@@ -1,60 +1,32 @@
-import type { ActorRef, SnapshotFrom, EventObject } from 'xstate';
-import type { Accessor } from 'solid-js';
-import { createEffect, createMemo, onCleanup } from 'solid-js';
-import { deriveServiceState } from './deriveServiceState.ts';
-import { createImmutable } from './createImmutable.ts';
-import type { CheckSnapshot } from './types.ts';
-import { unwrap } from 'solid-js/store';
+import {
+  EventFromLogic,
+  type ActorOptions,
+  type ActorRefFrom,
+  type AnyActorLogic,
+  type AnyActorRef,
+  type ConditionalRequired,
+  type IsNotNever,
+  type RequiredActorOptionsKeys,
+  type SnapshotFrom
+} from 'xstate';
+import { fromActorRef } from './fromActorRef.ts';
+import { useActorRef } from './useActorRef.ts';
 
-const noop = () => {
-  /* ... */
-};
-
-type Sender<TEvent> = (event: TEvent) => void;
-
-export function useActor<TActor extends ActorRef<any, any>>(
-  actorRef: Accessor<TActor> | TActor
-): [Accessor<CheckSnapshot<SnapshotFrom<TActor>>>, TActor['send']];
-export function useActor<TEvent extends EventObject, TEmitted>(
-  actorRef: Accessor<ActorRef<TEvent, TEmitted>> | ActorRef<TEvent, TEmitted>
-): [Accessor<CheckSnapshot<TEmitted>>, Sender<TEvent>];
-export function useActor(
-  actorRef:
-    | Accessor<ActorRef<EventObject, unknown>>
-    | ActorRef<EventObject, unknown>
-): [Accessor<unknown>, Sender<EventObject>] {
-  const actorMemo = createMemo(() =>
-    typeof actorRef === 'function' ? actorRef() : actorRef
-  );
-
-  const [state, setState] = createImmutable({
-    snapshot: deriveServiceState(actorMemo().getSnapshot?.())
-  });
-
-  const setActorState = (actorState: unknown, prevState?: unknown) => {
-    setState({
-      snapshot: deriveServiceState(actorState, prevState)
-    });
-  };
-
-  createEffect<boolean>((isInitialActor) => {
-    const currentActor = actorMemo();
-
-    if (!isInitialActor) {
-      setActorState(currentActor.getSnapshot?.());
-    }
-
-    const { unsubscribe } = currentActor.subscribe({
-      next: (nextState) => setActorState(nextState, unwrap(state.snapshot)),
-      error: noop,
-      complete: noop
-    });
-    onCleanup(unsubscribe);
-
-    return false;
-  }, true);
-
-  const send = (event: EventObject) => actorMemo().send(event);
-
-  return [() => state.snapshot, send];
+export function useActor<TLogic extends AnyActorLogic>(
+  logic: TLogic,
+  ...[options]: ConditionalRequired<
+    [
+      options?: ActorOptions<TLogic> & {
+        [K in RequiredActorOptionsKeys<TLogic>]: unknown;
+      }
+    ],
+    IsNotNever<RequiredActorOptionsKeys<TLogic>>
+  >
+): [
+  SnapshotFrom<TLogic>,
+  (event: EventFromLogic<TLogic>) => void,
+  ActorRefFrom<TLogic>
+] {
+  const actorRef = useActorRef(logic, options) as AnyActorRef;
+  return [fromActorRef(actorRef)(), actorRef.send, actorRef as any];
 }

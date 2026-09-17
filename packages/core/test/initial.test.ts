@@ -1,6 +1,34 @@
 import { createActor, createMachine } from '../src/index.ts';
 
 describe('Initial states', () => {
+  it('should support object syntax for initial', () => {
+    const machine = createMachine({
+      initial: { target: 'a' },
+      states: {
+        a: {},
+        b: {}
+      }
+    });
+    expect(createActor(machine).getSnapshot().value).toEqual('a');
+  });
+
+  it('should support nested object syntax for initial', () => {
+    const machine = createMachine({
+      initial: { target: 'a' },
+      states: {
+        a: {
+          initial: { target: 'a1' },
+          states: {
+            a1: {},
+            a2: {}
+          }
+        },
+        b: {}
+      }
+    });
+    expect(createActor(machine).getSnapshot().value).toEqual({ a: 'a1' });
+  });
+
   it('should return the correct initial state', () => {
     const machine = createMachine({
       initial: 'a',
@@ -160,87 +188,5 @@ describe('Initial states', () => {
         bar: { a: { b: 'c' } }
       }
     });
-  });
-
-  it('should resolve deep initial state', () => {
-    const machine = createMachine({
-      initial: '#deep_id',
-      states: {
-        foo: {
-          initial: 'other',
-          states: {
-            other: {},
-            deep: {
-              id: 'deep_id'
-            }
-          }
-        }
-      }
-    });
-    const actorRef = createActor(machine).start();
-    expect(actorRef.getSnapshot().value).toEqual({ foo: 'deep' });
-  });
-
-  it('should resolve multiple deep initial states', () => {
-    const machine = createMachine({
-      initial: ['#foo_deep_id', '#bar_deep_id'],
-      states: {
-        root: {
-          type: 'parallel',
-          states: {
-            foo: {
-              initial: 'foo_other',
-              states: {
-                foo_other: {},
-                foo_deep: {
-                  id: 'foo_deep_id'
-                }
-              }
-            },
-            bar: {
-              initial: 'bar_other',
-              states: {
-                bar_other: {},
-                bar_deep: {
-                  id: 'bar_deep_id'
-                }
-              }
-            }
-          }
-        }
-      }
-    });
-    const service = createActor(machine).start();
-    expect(service.getSnapshot().value).toEqual({
-      root: {
-        foo: 'foo_deep',
-        bar: 'bar_deep'
-      }
-    });
-  });
-
-  it('should not entry default initial state of the parent if deep state is targeted with initial', () => {
-    let called = false;
-
-    const machine = createMachine({
-      initial: '#deep_id',
-      states: {
-        foo: {
-          initial: 'other',
-          states: {
-            other: {
-              entry: () => {
-                called = true;
-              }
-            },
-            deep: {
-              id: 'deep_id'
-            }
-          }
-        }
-      }
-    });
-    createActor(machine).start();
-    expect(called).toEqual(false);
   });
 });
